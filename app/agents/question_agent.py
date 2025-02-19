@@ -9,7 +9,7 @@ class QuestionAgent(BaseAgent):
     def __init__(self):
         super().__init__("question_agent")
         self.llm = ChatAnthropic()
-        self.initial_question = "어떤 제품을 원하시는지에 대한 설명을 해주세요"
+        self.initial_question = "어떤 용도로 사용할 계획이야? 그림 그리기, 필기, 영상 감상, 게임, 문서 작업 등.." # 사용자의 요구사항을 정확히 파악하기 위해 사용자의 사용 목적을 물어봄 (첫번째 질문이 중요함)
         logger.debug("QuestionAgent initialized")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -27,7 +27,7 @@ class QuestionAgent(BaseAgent):
         conversation_history = state.get("conversation_history", [])
         
         if state.get("status") == "collecting_input":
-            # 사용자 입력을 구체적인 요구사항으로 변환 TODO - 구체적인 변환 규칙 정의 필요
+            # 사용자 입력을 구체적인 요구사항으로 변환 TODO - 구체적인 변환 규칙 정의 필요 / 사용자가 불분명할 답변을 한 경우에는 사용자가 필요한 스펙을 예상해줘 
             prompt = f""" 
             다음 사용자의 제품 설명을 구체적인 기술 스펙과 요구사항으로 변환해주세요:
             
@@ -67,7 +67,7 @@ class QuestionAgent(BaseAgent):
                 # 각 에이전트가 원하는 상태 구조로 변환하여 반환 (TODO - 구체적인 구조 정의 필요)
                 # TODO 각 에이전트 input 방식으로 변환 필요  
                 
-                # 스펙 분석 에이전트 질문 생성
+                # 1. 스펙 분석 에이전트 질문 생성
                 spec_prompt = f"""
                 다음 요구사항을 바탕으로 제품의 기술 스펙을 구체적으로 나열해주세요:
                 
@@ -75,7 +75,7 @@ class QuestionAgent(BaseAgent):
                 """
                 spec_agent_state = await self.llm.apredict(spec_prompt)
 
-                # 리뷰 분석 에이전트 질문 생성
+                # 2. 리뷰 분석 에이전트 질문 생성
                 review_prompt = f"""
                 다음 사용자 요구사항을 바탕으로 리뷰 수집을 위한 분석 구조를 생성해주세요:
                 
@@ -102,11 +102,11 @@ class QuestionAgent(BaseAgent):
                     ]
                 }}
 
-                요구사항에서 명시되지 않은 부분은 요구사항의 문맥을 고려하여 합리적으로 추론해주세요.
+                요구사항에서 명시되지 않은 부분은 비워주세요. 
                 """
                 review_agent_state = await self.llm.apredict(review_prompt)
 
-                # 유튜브 에이전트 질문 생성
+                # 3. 유튜브 에이전트 질문 생성
                 youtube_prompt = f"""
                 다음 요구사항을 바탕으로 유튜브 리뷰를 수집해주세요:
                 
