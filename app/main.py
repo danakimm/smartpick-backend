@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import chat, product, report
 from .config import settings
+from .agents.question_agent import QuestionAgent
+from .agents.review_agent import ProductRecommender
+from .agents.graph import define_workflow
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,5 +22,27 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(product.router, prefix="/api/products", tags=["products"])
-app.include_router(report.router, prefix="/api/reports", tags=["reports"])
+
+# 질문 에이전트 엔드포인트 추가
+@app.post("/api/question")
+async def handle_question(request: Request):
+    state = await request.json()
+    agent = QuestionAgent()
+    response = await agent.run(state)
+    return response
+
+# 리뷰 분석 에이전트 엔드포인트 추가
+@app.post("/api/review")
+async def handle_review(request: Request):
+    state = await request.json()
+    recommender = ProductRecommender()
+    response = recommender.generate_recommendations(state)
+    return response
+
+@app.post("/api/workflow")
+async def handle_workflow(request: Request):
+    state = await request.json()
+    workflow = define_workflow()
+    response = await workflow.run(state)
+    return response
+

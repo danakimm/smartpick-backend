@@ -1,6 +1,8 @@
 from langgraph.graph import Graph
 from typing import Dict, TypedDict, Annotated, Sequence
 import operator
+import logging
+import asyncio
 
 class AgentState(TypedDict):
     question: str
@@ -11,22 +13,50 @@ class AgentState(TypedDict):
     middleware_results: dict
     final_report: str
 
+# 에이전트 인스턴스 가져오기
+from .question_agent import QuestionAgent
+from .review_agent import ProductRecommender
+# from .spec_agent import SpecAgent
+# from .youtube_agent import YouTubeAgent
+# from .middleware_agent import MiddlewareAgent
+# from .report_agent import ReportAgent
+
+question_agent = QuestionAgent()
+review_agent = ProductRecommender()
+# spec_agent = SpecAgent()
+# youtube_agent = YouTubeAgent()
+# middleware_agent = MiddlewareAgent()
+# report_agent = ReportAgent()
+
+logger = logging.getLogger("smartpick.agents.graph")
+
 def define_workflow():
+    logger.debug("Defining workflow")
     # 워크플로우 그래프 정의
     workflow = Graph()
 
     # 노드 정의
     @workflow.node()
     async def question_decomposition(state: AgentState) -> AgentState:
-        sub_questions = await claude_agent.decompose_question(state["question"])
+        sub_questions = await question_agent.run(state)
         return {"sub_questions": sub_questions}
 
     @workflow.node()
     async def parallel_analysis(state: AgentState) -> Dict:
+        youtube_task = youtube_agent.analyze(state["youtube_agent_state"])
+        review_task = review_agent.run(state["review_agent_state"])
+        spec_task = spec_agent.analyze(state["spec_agent_state"]))
+        
+        youtube_results, review_results, spec_results = await asyncio.gather(
+            youtube_task,
+            review_task,
+            spec_task
+        )
+        
         results = {
-            "youtube_results": await youtube_agent.analyze(state["sub_questions"]),
-            "review_results": await review_agent.analyze(state["sub_questions"]),
-            "spec_results": await spec_agent.analyze(state["sub_questions"])
+            "youtube_results": youtube_results,
+            "review_results": review_results,
+            "spec_results": spec_results
         }
         return results
 
@@ -49,4 +79,4 @@ def define_workflow():
     workflow.add_edge("parallel_analysis", "middleware_processing")
     workflow.add_edge("middleware_processing", "report_generation")
 
-    return workflow 
+    return workflow
