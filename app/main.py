@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import chat, product, report
-from .config import settings
 from .agents.question_agent import QuestionAgent
 from .agents.review_agent import ProductRecommender
 from .agents.graph import define_workflow
