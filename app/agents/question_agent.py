@@ -17,35 +17,46 @@ class QuestionAgent(BaseAgent):
         # self.llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=os.getenv("OPENAI_API_KEY"))
         self.prompts = {
-            'initial': "태블릿을 주로 어떤 용도로 사용하시나요? ",
+            'initial': "어떤 태블릿을 구매하고 싶으신가요?",
+            'follow_up': {
+                "용도": "구체적으로 어떤 작업들을 하실 계획이신가요?",
+                "사용시간": "하루에 얼마나 사용하실 계획이신가요?",
+                "휴대성": "태블릿을 들고 다니실 일이 많으신가요?",
+                "예산": "예산은 어느 정도로 생각하고 계신가요?",
+                "추가기능": "펜이나 키보드 등 추가 액세서리가 필요하신가요?"
+            },
             'requirements': """
                 당신은 태블릿 전문가입니다. 사용자의 태블릿 구매 요구사항을 분석해주세요.
                 
                 사용자 설명: {user_input}
                 
-                다음 형식으로 응답해주세요:
+                다음 형식으로 키워드 중심으로 요약해서 출력해주세요:
                 
-                1. 핵심 요구사항:
+                1. 핵심 요구사항 (각 항목 50자 이내):
                 - 사용자가 명시적으로 언급한 필수 기능과 선호사항
                 - 사용 목적과 관련된 잠재적 요구사항
                 - 사용자가 표현한 우려사항이나 기대
+
+                2. 예산 범위 (각 항목 30자 이내):
+                - 명시된 예산 정보
+                - 예산 관련 우려사항이나 기대
                 
-                2. 기술 스펙:
+                3. 기술 스펙:
                 - 언급된 구체적인 하드웨어 요구사항
                 - 사용 목적을 고려했을 때 필요한 최소 사양
                 - 호환성이나 확장성 관련 요구사항
                 
-                3. 예산 범위:
-                - 명시된 예산 정보
-                - 예산 관련 우려사항이나 기대
             """,
             'confirmation': """
                 제가 이해한 요구사항은 다음과 같습니다:
                 
                 {requirements}
                 
-                이러한 이해가 정확한가요? 맞다면 'OK'나 '네', '맞습니다' 등을 입력해주시고, 
-                수정이 필요하다면 수정이 필요한 부분을 설명해주세요.
+                **요구사항이 맞다면**
+                "OK", "네", "맞습니다" 중 하나를 입력해주세요. 입력하면 종료됩니다.
+                
+                **수정이 필요하다면**
+                변경해야 할 부분을 설명해주세요. 설명해주시면 수정하여 다시 정리해드립니다.
             """,
             'update_requirements': """
                 기존 요구사항: {previous_requirements}
@@ -67,33 +78,64 @@ class QuestionAgent(BaseAgent):
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         try:
             logger.debug(f"Running QuestionAgent with state: {state}")
-
+            
             if "conversation_history" not in state:
                 return {
                     "response": self.prompts['initial'],
                     "conversation_history": [],
                     "requirements": None,
-                    "status": "collecting_input"
+                    "collected_info": {},
+                    "status": "collecting_usage"
                 }
             
             user_input = state.get("user_input", "").lower()
             conversation_history = state.get("conversation_history", [])
-            current_status = state.get("status", "collecting_input")
+            current_status = state.get("status", "collecting_usage")
+            collected_info = state.get("collected_info", {})
             
-            if current_status == "collecting_input":
-                prompt = self.prompts['requirements'].format(user_input=user_input)
-                requirements_response = await self.llm.ainvoke(prompt)
-                requirements = requirements_response.content if hasattr(requirements_response, 'content') else str(requirements_response)
+            if current_status.startswith("collecting_"):
+                # 정보 수집 단계
+                collected_info[current_status.replace("collecting_", "")] = user_input
                 
-                return {
-                    "response": self.prompts['confirmation'].format(requirements=requirements),
-                    "conversation_history": conversation_history + [
-                        {"role": "user", "content": user_input},
-                        {"role": "assistant", "content": self.prompts['confirmation'].format(requirements=requirements)}
-                    ],
-                    "requirements": requirements,
-                    "status": "confirming_requirements"
-                }
+                # 다음 질문 결정
+                next_question = None
+                if current_status == "collecting_usage":
+                    next_question = ("collecting_details", self.prompts['follow_up']['용도'])
+                elif current_status == "collecting_details":
+                    next_question = ("collecting_mobility", self.prompts['follow_up']['휴대성'])
+                elif current_status == "collecting_mobility":
+                    next_question = ("collecting_budget", self.prompts['follow_up']['예산'])
+                elif current_status == "collecting_budget":
+                    next_question = ("collecting_accessories", self.prompts['follow_up']['추가기능'])
+                elif current_status == "collecting_accessories":
+                    # 모든 정보가 수집됨, 요구사항 분석으로 진행
+                    combined_input = self._combine_collected_info(collected_info)
+                    prompt = self.prompts['requirements'].format(user_input=combined_input)
+                    requirements_response = await self.llm.ainvoke(prompt)
+                    requirements = requirements_response.content if hasattr(requirements_response, 'content') else str(requirements_response)
+                    
+                    return {
+                        "response": self.prompts['confirmation'].format(requirements=requirements),
+                        "conversation_history": conversation_history + [
+                            {"role": "user", "content": user_input},
+                            {"role": "assistant", "content": self.prompts['confirmation'].format(requirements=requirements)}
+                        ],
+                        "requirements": requirements,
+                        "collected_info": collected_info,
+                        "status": "confirming_requirements"
+                    }
+                
+                if next_question:
+                    return {
+                        "response": next_question[1],
+                        "conversation_history": conversation_history + [
+                            {"role": "user", "content": user_input},
+                            {"role": "assistant", "content": next_question[1]}
+                        ],
+                        "requirements": None,
+                        "collected_info": collected_info,
+                        "status": next_question[0]
+                    }
             
             elif current_status == "confirming_requirements":
                 # 사용자 확인 응답 체크
@@ -274,5 +316,14 @@ class QuestionAgent(BaseAgent):
             logger.error(f"Error in _prepare_youtube_agent_state: {e}")
             logger.error(f"Failed content: {content}")
             raise
+        
+    def _combine_collected_info(self, collected_info: Dict[str, str]) -> str:
+        return f"""
+        사용 목적: {collected_info.get('usage', '')}
+        상세 사용계획: {collected_info.get('details', '')}
+        이동성 요구사항: {collected_info.get('mobility', '')}
+        예산: {collected_info.get('budget', '')}
+        필요한 액세서리: {collected_info.get('accessories', '')}
+        """
         
 
