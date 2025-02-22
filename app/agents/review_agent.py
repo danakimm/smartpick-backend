@@ -1,20 +1,23 @@
 from typing import Dict, Any
+import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.schema import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import json
 from review_db_manager import ReviewDBManager
-from config import OPENAI_API_KEY
+from dotenv import load_dotenv
 from .base import BaseAgent
 import logging
 
 logger = logging.getLogger("smartpick.agents.review_agent")
 
+load_dotenv()
+
 class ProductRecommender(BaseAgent):
     def __init__(self, persist_directory: str = "product_reviews_db"):
         super().__init__(name="ProductRecommender")
         self.db_manager = ReviewDBManager(persist_directory)
-        self.openai_api_key = OPENAI_API_KEY
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
         logger.debug("ProductRecommender initialized")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
