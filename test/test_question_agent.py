@@ -29,7 +29,10 @@ async def simulate_conversation():
                 "conversation_history": response.get('conversation_history', []),
                 "requirements": response.get('requirements'),
                 "collected_info": response.get('collected_info', {}),
-                "status": response.get('status')
+                "missing_info": response.get('missing_info', []),
+                "current_question": response.get('current_question'),
+                "status": response.get('status'),
+                "additional_requirements": response.get('additional_requirements')
             }
             
             # 에이전트 실행

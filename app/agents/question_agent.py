@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 # from langchain_anthropic import ChatAnthropic 
 from langchain_openai import ChatOpenAI
-from typing import Dict, Any
+from typing import Dict, Any, List
 from .base import BaseAgent
 import logging
 import json
@@ -18,12 +18,33 @@ class QuestionAgent(BaseAgent):
         self.llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=os.getenv("OPENAI_API_KEY"))
         self.prompts = {
             'initial': "어떤 태블릿을 구매하고 싶으신가요?",
+            'analyze_response': """당신은 사용자의 태블릿 구매 요구사항을 분석하는 AI 시스템입니다.
+            아래 사용자의 응답을 분석하여 정확히 다음 JSON 형식으로만 응답해주세요.
+            다른 어떤 설명이나 텍스트도 포함하지 마세요.
+            
+            사용자 응답: {user_input}
+            
+            {{
+                "included_info": {{
+                    "budget": {{
+                        "included": false,
+                        "value": ""
+                    }},
+                    "preferred_brand": {{
+                        "included": false,
+                        "value": ""
+                    }},
+                    "purpose": {{
+                        "included": false,
+                        "value": ""
+                    }}
+                }},
+                "missing_info": ["budget", "preferred_brand", "purpose"]
+            }}""",
             'follow_up': {
-                "용도": "구체적으로 어떤 작업들을 하실 계획이신가요?",
-                "사용시간": "하루에 얼마나 사용하실 계획이신가요?",
-                "휴대성": "태블릿을 들고 다니실 일이 많으신가요?",
-                "예산": "예산은 어느 정도로 생각하고 계신가요?",
-                "추가기능": "펜이나 키보드 등 추가 액세서리가 필요하신가요?"
+                "budget": "예산은 어느 정도로 생각하고 계신가요?",
+                "preferred_brand": "선호하시는 브랜드가 있으신가요?",
+                "purpose": "태블릿을 주로 어떤 용도로 사용하실 계획이신가요?"
             },
             'requirements': """
                 당신은 태블릿 전문가입니다. 사용자의 태블릿 구매 요구사항을 분석해주세요.
@@ -67,7 +88,8 @@ class QuestionAgent(BaseAgent):
                 2. 핵심 요구사항:
                 3. 기술 스펙:
                 4. 예산 범위:
-            """
+            """,
+            'ask_additional': "기본 정보는 확인되었습니다. 추가로 고려하시는 요구사항이 있으시다면 말씀해 주세요.\n없으시다면 '없음'이라고 답변해 주세요.",
         }
         logger.debug("QuestionAgent initialized")
 
@@ -77,66 +99,101 @@ class QuestionAgent(BaseAgent):
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            logger.debug(f"Running QuestionAgent with state: {state}")
-            
             if "conversation_history" not in state:
                 return {
                     "response": self.prompts['initial'],
                     "conversation_history": [],
                     "requirements": None,
                     "collected_info": {},
-                    "status": "collecting_usage"
+                    "status": "collecting_initial"
                 }
             
-            user_input = state.get("user_input", "").lower()
+            user_input = state.get("user_input", "").strip()
             conversation_history = state.get("conversation_history", [])
-            current_status = state.get("status", "collecting_usage")
+            current_status = state.get("status", "collecting_initial")
             collected_info = state.get("collected_info", {})
-            
-            if current_status.startswith("collecting_"):
-                # 정보 수집 단계
-                collected_info[current_status.replace("collecting_", "")] = user_input
+
+            if current_status == "collecting_initial":
+                analysis_prompt = self.prompts['analyze_response'].format(user_input=user_input)
+                analysis_response = await self.llm.ainvoke(analysis_prompt)
+                content = analysis_response.content if hasattr(analysis_response, 'content') else str(analysis_response)
                 
-                # 다음 질문 결정
-                next_question = None
-                if current_status == "collecting_usage":
-                    next_question = ("collecting_details", self.prompts['follow_up']['용도'])
-                elif current_status == "collecting_details":
-                    next_question = ("collecting_mobility", self.prompts['follow_up']['휴대성'])
-                elif current_status == "collecting_mobility":
-                    next_question = ("collecting_budget", self.prompts['follow_up']['예산'])
-                elif current_status == "collecting_budget":
-                    next_question = ("collecting_accessories", self.prompts['follow_up']['추가기능'])
-                elif current_status == "collecting_accessories":
-                    # 모든 정보가 수집됨, 요구사항 분석으로 진행
-                    combined_input = self._combine_collected_info(collected_info)
-                    prompt = self.prompts['requirements'].format(user_input=combined_input)
-                    requirements_response = await self.llm.ainvoke(prompt)
-                    requirements = requirements_response.content if hasattr(requirements_response, 'content') else str(requirements_response)
+                try:
+                    content = content.strip()
+                    content = content.replace('```json', '').replace('```', '').strip()
+                    analysis = json.loads(content)
                     
-                    return {
-                        "response": self.prompts['confirmation'].format(requirements=requirements),
-                        "conversation_history": conversation_history + [
-                            {"role": "user", "content": user_input},
-                            {"role": "assistant", "content": self.prompts['confirmation'].format(requirements=requirements)}
-                        ],
-                        "requirements": requirements,
-                        "collected_info": collected_info,
-                        "status": "confirming_requirements"
-                    }
+                    # 수집된 정보 저장
+                    for key, info in analysis['included_info'].items():
+                        if info['included']:
+                            collected_info[key] = info['value']
+
+                    # 누락된 정보가 있는 경우
+                    missing_info = analysis.get('missing_info', [])
+                    if missing_info:
+                        next_question = self.prompts['follow_up'][missing_info[0]]
+                        return {
+                            "response": next_question,
+                            "conversation_history": conversation_history + [
+                                {"role": "user", "content": user_input},
+                                {"role": "assistant", "content": next_question}
+                            ],
+                            "collected_info": collected_info,
+                            "missing_info": missing_info,
+                            "current_question": missing_info[0],
+                            "status": "collecting_missing"
+                        }
+                    else:
+                        return await self._proceed_to_requirements(collected_info, conversation_history, user_input)
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error: {e}")
+                    return self._handle_error("응답 분석 중 오류가 발생했습니다.")
+
+            elif current_status == "collecting_missing":
+                # 현재 질문에 대한 답변 저장
+                current_question = state.get("current_question")
+                missing_info = state.get("missing_info", [])
                 
-                if next_question:
+                if current_question:
+                    collected_info[current_question] = user_input
+                    # 현재 질문을 missing_info에서 제거
+                    missing_info = [info for info in missing_info if info != current_question]
+
+                # 남은 질문이 있는지 확인
+                if missing_info:
+                    next_question = self.prompts['follow_up'][missing_info[0]]
                     return {
-                        "response": next_question[1],
+                        "response": next_question,
                         "conversation_history": conversation_history + [
                             {"role": "user", "content": user_input},
-                            {"role": "assistant", "content": next_question[1]}
+                            {"role": "assistant", "content": next_question}
                         ],
-                        "requirements": None,
                         "collected_info": collected_info,
-                        "status": next_question[0]
+                        "missing_info": missing_info,
+                        "current_question": missing_info[0],
+                        "status": "collecting_missing"
                     }
-            
+                else:
+                    # 모든 필수 정보가 수집되면 추가 요구사항 확인
+                    return {
+                        "response": self.prompts['ask_additional'],
+                        "conversation_history": conversation_history + [
+                            {"role": "user", "content": user_input},
+                            {"role": "assistant", "content": self.prompts['ask_additional']}
+                        ],
+                        "collected_info": collected_info,
+                        "status": "asking_additional"
+                    }
+
+            elif current_status == "asking_additional":
+                if user_input.lower().strip() != "없음":
+                    # 추가 요구사항을 collected_info에 저장
+                    collected_info["additional_requirements"] = user_input
+                
+                # 요구사항 분석으로 진행
+                return await self._proceed_to_requirements(collected_info, conversation_history, user_input)
+
             elif current_status == "confirming_requirements":
                 # 사용자 확인 응답 체크
                 if self._is_confirmation_response(user_input):
@@ -318,12 +375,35 @@ class QuestionAgent(BaseAgent):
             raise
         
     def _combine_collected_info(self, collected_info: Dict[str, str]) -> str:
-        return f"""
-        사용 목적: {collected_info.get('usage', '')}
-        상세 사용계획: {collected_info.get('details', '')}
-        이동성 요구사항: {collected_info.get('mobility', '')}
+        base_info = f"""
+        사용 목적: {collected_info.get('purpose', '')}
+        선호 브랜드: {collected_info.get('preferred_brand', '')}
         예산: {collected_info.get('budget', '')}
-        필요한 액세서리: {collected_info.get('accessories', '')}
         """
+        
+        # 추가 요구사항이 있는 경우 포함
+        if additional_req := collected_info.get('additional_requirements'):
+            base_info += f"\n추가 요구사항: {additional_req}"
+            
+        return base_info
+        
+    async def _proceed_to_requirements(self, collected_info: Dict[str, str], 
+                                     conversation_history: List[Dict[str, str]], 
+                                     user_input: str) -> Dict[str, Any]:
+        combined_input = self._combine_collected_info(collected_info)
+        prompt = self.prompts['requirements'].format(user_input=combined_input)
+        requirements_response = await self.llm.ainvoke(prompt)
+        requirements = requirements_response.content if hasattr(requirements_response, 'content') else str(requirements_response)
+        
+        return {
+            "response": self.prompts['confirmation'].format(requirements=requirements),
+            "conversation_history": conversation_history + [
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": self.prompts['confirmation'].format(requirements=requirements)}
+            ],
+            "requirements": requirements,
+            "collected_info": collected_info,
+            "status": "confirming_requirements"
+        }
         
 
