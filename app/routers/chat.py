@@ -1,12 +1,7 @@
 from fastapi import APIRouter, WebSocket
-from typing import List, Dict
+from typing import Dict
 from .agents.graph import define_workflow, AgentState
-from enum import Enum
-
-class ChatState(Enum):
-    CLARIFYING = "clarifying"
-    CONFIRMED = "confirmed"
-    PROCESSING = "processing"
+from .agents.question_agent import QuestionAgent
 
 router = APIRouter()
 active_connections: Dict[str, WebSocket] = {}  # client_id로 연결 관리
@@ -17,112 +12,74 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     active_connections[client_id] = websocket
     
     try:
+        question_agent = QuestionAgent()
+        state = {}
+        
+        # 초기 메시지 전송
+        initial_response = await question_agent.run(state)
+        await websocket.send_json({
+            "type": "message",
+            "client_id": client_id,
+            "data": {
+                "response": initial_response["response"],
+                "status": initial_response["status"]
+            }
+        })
+        
         while True:
             message = await websocket.receive_json()
-            message_type = message.get("type", "")
             content = message.get("content", "")
             
-            if message_type == "initial_question":
+            # QuestionAgent 상태 업데이트
+            state = {
+                "user_input": content,
+                "conversation_history": initial_response.get('conversation_history', []),
+                "requirements": initial_response.get('requirements'),
+                "collected_info": initial_response.get('collected_info', {}),
+                "missing_info": initial_response.get('missing_info', []),
+                "current_question": initial_response.get('current_question'),
+                "status": initial_response.get('status'),
+                "additional_requirements": initial_response.get('additional_requirements')
+            }
+            
+            # QuestionAgent 실행
+            response = await question_agent.run(state)
+            
+            # 클라이언트에 응답 전송
+            await websocket.send_json({
+                "type": "message",
+                "client_id": client_id,
+                "data": {
+                    "response": response["response"],
+                    "status": response["status"]
+                }
+            })
+            
+            # completed 상태인 경우 워크플로우 실행
+            if response.get('status') == "completed":
                 workflow = define_workflow()
-                clarification_state = {
-                    "question": content,
-                    "state": ChatState.CLARIFYING,
-                    "client_id": client_id 
+                agent_states = await question_agent._prepare_agent_states(response['requirements'])
+                
+                initial_state: AgentState = {
+                    "question": response["requirements"],
+                    "sub_questions": [],
+                    "youtube_agent_state": agent_states["youtube_agent_state"],
+                    "review_agent_state": agent_states["review_agent_state"],
+                    "spec_agent_state": agent_states["spec_agent_state"],
+                    "youtube_results": {},
+                    "review_results": {},
+                    "spec_results": {},
+                    "middleware_results": {},
+                    "final_report": ""
                 }
                 
-                clarified_result = await workflow.run_clarification_agent(clarification_state)
-                
+                final_state = await workflow.invoke(initial_state)
                 await websocket.send_json({
-                    "type": "clarification_check",
+                    "type": "complete",
                     "client_id": client_id,
-                    "data": {
-                        "original_question": content,
-                        "clarified_question": clarified_result["clarified_question"],
-                        "sub_questions": clarified_result["sub_questions"],
-                        "needs_confirmation": True
-                    }
+                    "data": final_state
                 })
-                
-            elif message_type == "clarification_response":
-                if content.get("confirmed"):
-                    workflow = define_workflow()
-                    initial_state: AgentState = {
-                        "question": content["clarified_question"],
-                        "sub_questions": content["sub_questions"],
-                        "state": ChatState.PROCESSING,
-                        "client_id": client_id, 
-                        "youtube_results": {},
-                        "review_results": {},
-                        "spec_results": {},
-                        "middleware_results": {},
-                        "final_report": ""
-                    }
-                    
-                    async def progress_callback(state: dict):
-                        await websocket.send_json({
-                            "type": "progress",
-                            "client_id": client_id,
-                            "data": state
-                        })
-                    
-                    try:
-                        workflow.add_progress_callback(progress_callback)
-                        final_state = await workflow.invoke(initial_state)
-                        await websocket.send_json({
-                            "type": "complete",
-                            "client_id": client_id,
-                            "data": final_state
-                        })
-                    except Exception as e:
-                        await websocket.send_json({
-                            "type": "error",
-                            "client_id": client_id,
-                            "message": str(e)
-                        })
-                else:
-                    await websocket.send_json({
-                        "type": "request_clarification",
-                        "client_id": client_id,
-                        "data": {
-                            "message": "질문을 다시 작성해주세요."
-                        }
-                    })
-                    
     except Exception as e:
         print(f"WebSocket error for client {client_id}: {e}")
     finally:
-        del active_connections[client_id]
-
-@router.post("/analyze")
-async def start_analysis_flow(question: str):
-    # 워크플로우 초기화
-    workflow = define_workflow()
-    
-    # 초기 상태 설정
-    initial_state: AgentState = {
-        "question": question,
-        "sub_questions": [],
-        "youtube_results": {},
-        "review_results": {},
-        "spec_results": {},
-        "middleware_results": {},
-        "final_report": ""
-    }
-    
-    # 워크플로우 실행
-    try:
-        final_state = await workflow.invoke(initial_state)
-        return {
-            "status": "success",
-            "report": final_state["final_report"]
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
-@router.get("/status/{task_id}")
-async def get_analysis_status(task_id: str):
-    # 워크플로우 상태 조회
-    return await workflow.get_status(task_id) 
+        del active_connections[client_id] 

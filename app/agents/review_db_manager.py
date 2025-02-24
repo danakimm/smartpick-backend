@@ -1,14 +1,17 @@
+import os
 import pandas as pd
 import re
 import emoji
 from typing import List, Dict
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
-from config import OPENAI_API_KEY  
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class ReviewDBManager:
-    def __init__(self, persist_directory: str = "product_reviews_db"):
-        self.embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY) 
+    def __init__(self, persist_directory: str="product_reviews_db"):
+        self.embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
         self.persist_directory = persist_directory
         
         # 기존 벡터 DB가 있으면 로드, 없으면 None

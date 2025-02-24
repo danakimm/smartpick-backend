@@ -32,51 +32,84 @@ logger = logging.getLogger("smartpick.agents.graph")
 
 def define_workflow():
     logger.debug("Defining workflow")
-    # 워크플로우 그래프 정의
     workflow = Graph()
 
-    # 노드 정의
-    @workflow.node()
-    async def question_decomposition(state: AgentState) -> AgentState:
-        sub_questions = await question_agent.run(state)
-        return {"sub_questions": sub_questions}
-
-    @workflow.node()
     async def parallel_analysis(state: AgentState) -> Dict:
-        youtube_task = youtube_agent.analyze(state["youtube_agent_state"])
-        review_task = review_agent.run(state["review_agent_state"])
-        spec_task = spec_agent.analyze(state["spec_agent_state"]))
-        
+        # 병렬로 실행하기 위해 asyncio.gather 사용
         youtube_results, review_results, spec_results = await asyncio.gather(
-            youtube_task,
-            review_task,
-            spec_task
+            # YouTube 분석은 아직 구현되지 않음
+            asyncio.sleep(0),  # 임시 placeholder
+            
+            # Review 분석 실행
+            review_agent.run(state["review_agent_state"]["review_analysis"]),
+            
+            # Spec 분석은 아직 구현되지 않음
+            asyncio.sleep(0)  # 임시 placeholder
         )
         
+        logger.debug(f"Review results: {review_results}")  # 로깅 추가
+        
         results = {
-            "youtube_results": youtube_results,
+            "youtube_results": youtube_results or {},
             "review_results": review_results,
-            "spec_results": spec_results
+            "spec_results": spec_results or {},
         }
+        logger.debug(f"Parallel analysis results: {results}")  # 로깅 추가
         return results
 
-    @workflow.node()
     async def middleware_processing(state: AgentState) -> Dict:
-        combined_results = {**state["youtube_results"], 
-                          **state["review_results"], 
-                          **state["spec_results"]}
-        processed = await middleware_agent.process(combined_results)
-        return {"middleware_results": processed}
+        logger.debug(f"Middleware input state: {state}")  # 입력 상태 로깅
+        
+        try:
+            middleware_results = {
+                "recommendations": state["review_results"].get("recommendations", ""),
+                "analysis": {
+                    "youtube": state.get("youtube_results", {}),
+                    "review": state.get("review_results", {}),
+                    "spec": state.get("spec_results", {})
+                }
+            }
+            logger.debug(f"Middleware results: {middleware_results}")  # 결과 로깅
+            return {"middleware_results": middleware_results}
+            
+        except Exception as e:
+            logger.error(f"Error in middleware processing: {e}")
+            return {
+                "middleware_results": {
+                    "recommendations": "미들웨어 처리 중 오류가 발생했습니다.",
+                    "analysis": {}
+                }
+            }
 
-    @workflow.node()
     async def report_generation(state: AgentState) -> Dict:
-        final_report = await report_agent.generate(state["middleware_results"])
-        return {"final_report": final_report}
+        logger.debug(f"Report input state: {state}")  # 입력 상태 로깅
+        
+        try:
+            final_result = {
+                "final_report": state["middleware_results"]["recommendations"],
+                "analysis": state["middleware_results"]["analysis"]
+            }
+            logger.debug(f"Final result: {final_result}")  # 결과 로깅
+            return final_result
+            
+        except Exception as e:
+            logger.error(f"Error in report generation: {e}")
+            return {
+                "final_report": "최종 보고서 생성 중 오류가 발생했습니다.",
+                "analysis": {}
+            }
+
+    # 노드 추가
+    workflow.add_node("parallel_analysis", parallel_analysis)
+    workflow.add_node("middleware_processing", middleware_processing)
+    workflow.add_node("report_generation", report_generation)
 
     # 엣지 정의
-    workflow.set_entry_point("question_decomposition")
-    workflow.add_edge("question_decomposition", "parallel_analysis")
+    workflow.set_entry_point("parallel_analysis")
     workflow.add_edge("parallel_analysis", "middleware_processing")
     workflow.add_edge("middleware_processing", "report_generation")
+
+    # 최종 노드 설정
+    workflow.set_finish_point("report_generation")
 
     return workflow
