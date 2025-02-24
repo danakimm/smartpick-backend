@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.schema import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import json
-from review_db_manager import ReviewDBManager
+from app.agents.review_db_manager import ReviewDBManager
 from dotenv import load_dotenv
 from .base import BaseAgent
 import logging
@@ -14,11 +14,16 @@ logger = logging.getLogger("smartpick.agents.review_agent")
 load_dotenv()
 
 class ProductRecommender(BaseAgent):
-    def __init__(self, persist_directory: str = "product_reviews_db"):
+    def __init__(self, persist_directory: str = None):
         super().__init__(name="ProductRecommender")
+        if persist_directory is None:
+            persist_directory = os.getenv("REVIEW_DB_PATH", os.path.join(
+                os.path.dirname(__file__),
+                "tablet_reviews_db"
+            ))
         self.db_manager = ReviewDBManager(persist_directory)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        logger.debug("ProductRecommender initialized")
+        logger.debug(f"ProductRecommender initialized with db path: {persist_directory}")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug(f"Running ProductRecommender with state: {state}")
@@ -28,15 +33,16 @@ class ProductRecommender(BaseAgent):
     def _format_user_requirements(requirements: Dict[str, Any]) -> tuple[str, str, str]:
         """사용자 요구사항을 자연스러운 문장으로 변환"""
         scenario = f"""디지털 기기 사용 시나리오:
-    - 주요 활동: {requirements['사용_시나리오']['주요_활동']}
+    - 주요 활동: {', '.join(requirements['사용_시나리오']['주요_활동'])}
     - 사용 환경: {', '.join(requirements['사용_시나리오']['사용_환경'])}
     - 사용 시간: {requirements['사용_시나리오']['사용_시간']}
     - 사용자 수준: {requirements['사용_시나리오']['사용자_수준']}"""
 
         concerns = f"""제품 관련 주요 고려사항:
+    - 선호 브랜드: {', '.join(requirements['주요_관심사']['브랜드_선호도'])}
     - 불편사항: {', '.join(requirements['주요_관심사']['불편사항'])}
     - 중요 고려사항: {', '.join(requirements['주요_관심사']['만족도_중요항목'])}
-    - 디자인 선호도: {requirements['감성적_요구사항']['디자인_선호도']}
+    - 디자인 선호도: {', '.join(requirements['감성적_요구사항']['디자인_선호도'])}
     - 가격대: {requirements['감성적_요구사항']['가격대_심리']}"""
 
         worries = f"""주요 우려사항:
@@ -45,31 +51,41 @@ class ProductRecommender(BaseAgent):
         return scenario, concerns, worries
 
     def generate_recommendations(self, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"Generating recommendations with requirements: {requirements}")
-        """사용자 경험 중심의 제품 추천 생성"""
-        search_queries = [
-            # 주요 활동과 사용자 수준 관련 리뷰
-            f"{requirements['사용_시나리오']['주요_활동']} {requirements['사용_시나리오']['사용자_수준']}",
-            
-            # 사용 환경 관련 리뷰
-            " ".join(requirements['사용_시나리오']['사용_환경']),
-            
-            # 사용 시간 관련 리뷰
-            requirements['사용_시나리오']['사용_시간'],
-            
-            # 불편사항 관련 리뷰
-            " ".join(requirements['주요_관심사']['불편사항']),
-            
-            # 만족도 중요항목 관련 리뷰
-            " ".join(requirements['주요_관심사']['만족도_중요항목']),
-            
-            # 감성적 요구사항 관련 리뷰
-            f"{requirements['감성적_요구사항']['디자인_선호도']} " + 
-            f" {requirements['감성적_요구사항']['가격대_심리']}",
+        search_queries = []
+        
+        # 주요 활동 관련 리뷰
+        search_queries.extend(requirements['사용_시나리오']['주요_활동'])
+        
+        # 사용 환경 관련 리뷰
+        search_queries.extend(requirements['사용_시나리오']['사용_환경'])
+        
+        # 사용 시간 관련 리뷰
+        search_queries.append(requirements['사용_시나리오']['사용_시간'])
 
-            # 우려사항 관련 리뷰
-            " ".join(requirements['사용자_우려사항'])
-        ]
+        # 사용자 수준 관련 리뷰
+        search_queries.append(requirements['사용_시나리오']['사용자_수준'])
+        
+        # 브랜드 선호도 관련 리뷰
+        search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
+        
+        # 불편사항 관련 리뷰
+        search_queries.extend(requirements['주요_관심사']['불편사항'])
+        
+        # 만족도 중요항목 관련 리뷰
+        search_queries.extend(requirements['주요_관심사']['만족도_중요항목'])
+        
+        # 디자인 선호도 관련 리뷰
+        search_queries.extend(requirements['감성적_요구사항']['디자인_선호도'])
+        
+        # 가격대 관련 리뷰 - '상관없음'이 아닐 때만 포함
+        if requirements['감성적_요구사항']['가격대_심리'] != "상관없음":
+            search_queries.append(requirements['감성적_요구사항']['가격대_심리'])
+        
+        # 우려사항 관련 리뷰
+        search_queries.extend(requirements['사용자_우려사항'])
+        
+        # 빈 문자열이나 None 값 제거
+        search_queries = [query for query in search_queries if query and query.strip()]
 
         # 각 관점별로 리뷰 검색
         all_reviews = []
@@ -121,8 +137,8 @@ class ProductRecommender(BaseAgent):
         relevant_products = sorted(
             analyzed_products.items(),
             key=lambda x: (
-                x[1]['avg_similarity'] * 0.8 +  # 검색 관련성 30%
-                x[1]['avg_quality'] * 0.2       # 리뷰 품질 40%
+                x[1]['avg_similarity'] * 0.8 +  # 검색 관련성 80%
+                x[1]['avg_quality'] * 0.2       # 리뷰 품질 20%
             ),
             reverse=True
         )
@@ -221,7 +237,7 @@ class ProductRecommender(BaseAgent):
         logger.debug("\n=== 프롬프트 끝 ===\n")
 
         # ChatGPT를 통한 추천 생성
-        chain = prompt | ChatOpenAI(temperature=0.3, api_key=self.openai_api_key)
+        chain = prompt | ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key)
         result = chain.invoke(prompt_data)
 
         return {
@@ -249,6 +265,7 @@ class ProductRecommender(BaseAgent):
         ])
         
         chain = prompt | ChatOpenAI(
+            model="gpt-4o-mini",
             temperature=0, 
             api_key=self.openai_api_key
         )
@@ -276,18 +293,19 @@ if __name__ == "__main__":
     # 사용자 요구사항 예시
     user_review_requirements = {
         "사용_시나리오": {
-            "주요_활동": "디지털 드로잉",
+            "주요_활동": ["디지털 드로잉"],
             "사용_환경": ["카페", "이동 중", "실내"],
             "사용_시간": "하루 5시간 이상",
             "사용자_수준": "취미 작가"
         },
         "주요_관심사": {
+            "브랜드_선호도": ["애플"],
             "불편사항": ["발열", "배터리"],
             "만족도_중요항목": ["필기감", "휴대성", "화면 반응속도"]
         },
         "감성적_요구사항": {
-            "디자인_선호도": "심플한 디자인",
-            "가격대_심리": "가성비 선호"
+            "디자인_선호도": ["심플한 디자인"],
+            "가격대_심리": "상관없음"
         },
         "사용자_우려사항": [
             "장시간 사용시 피로도",
