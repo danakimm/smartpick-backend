@@ -4,7 +4,9 @@ import threading
 import time
 # 글로벌 변수로 큐 선언
 _global_queue = None
-
+def log_wrapper(log_message):
+    _global_queue.append(log_message)
+    add_log(log_message)
 def get_queue():
     global _global_queue
     if _global_queue is None:
@@ -59,7 +61,7 @@ class LogConsumer:
     def log_processing(self, log_message: str) -> None:
                 # 상태 정보 처리
         self.process_state_info(log_message)
-        
+        print(log_message)
         # 최근 로그 목록에 추가
         self.recent_logs.append(log_message)
         
@@ -103,8 +105,8 @@ class LogConsumer:
                 except Exception as e:
                     # 오류 발생 시 카운트 증가
                     self.state["error_count"] += 1
-                    print(f"로그 처리 중 오류 발생: {e}")
-                    self.log_processing(f"로그 처리 중 오류 발생: {e}")
+                    print(f"로그 처리 중 오류 발생(inner loop: print): {e}")
+                    self.log_wrapper(f"로그 처리 중 오류 발생(inner loop: wrapper): {e}")
             # 메시지가 처리되지 않았을 경우에만 대기
             if messages_processed == 0:
                 time.sleep(2)  # 2초 대기
@@ -116,7 +118,21 @@ class LogConsumer:
         if self.thread.is_alive():
             self.FLAG = False
             self.state["status"] = "shutdown"
-            self.log_processing("로그 소비자 종료 요청됨. 다음 사이클에서 종료됩니다.")
+            print("로그 소비자 종료 요청됨. 다음 사이클에서 종료됩니다.")
             self.thread.join()
+            while not get_queue().empty():
+                try:
+                    # 큐에서 로그 메시지 가져오기
+                    log_message = get_queue().get(block=False)
+                    self.log_processing(log_message)
+                    #messages_processed += 1
+                except queue.Empty:
+                    # 큐가 비었을 경우 루프 종료
+                    break
+                except Exception as e:
+                    # 오류 발생 시 카운트 증가
+                    self.state["error_count"] += 1
+                    print(f"로그 처리 중 오류 발생(outter : print): {e}")
+            # 메시지가 처리되지 않았을 경우에만 대기
             return True
         return False
