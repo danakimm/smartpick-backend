@@ -1,8 +1,37 @@
-fastapi
-uvicorn
-sqlalchemy
-pydantic
+# Core dependencies
+openai
 python-dotenv
+tiktoken
+numpy
+pandas
+faiss-cpu
+h5py
+pydantic
+
+# LangChain dependencies
 langchain
+langchain-openai
+langchain-upstage
+langchain-core
+langchain-community
+langchain-text-splitters
+
+# Web APIs and services
+fastapi
+uvicorn  # FastAPI 서버를 실행하기 위한 ASGI 서버
+
+# Vector databases
+chromadb
+
+# Web scraping and data processing
+beautifulsoup4
+
+# Optional but commonly needed with these packages
+requests
+pyyaml
+
+
+# 원래있던거
+sqlalchemy
 langgraph
 anthropic
