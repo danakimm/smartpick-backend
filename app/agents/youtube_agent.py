@@ -9,8 +9,8 @@ def log_wrapper(log_message):
     globalist.append(log_message)
     add_log(log_message)
     
-class YouTubeAgent(BaseAgent):
-    def __init__(self, name: str):
+class YouTube_agent(BaseAgent):
+    def __init__(self, name="youtube_agent"):
         self.name = name
         self.filtter= Keyword_filter()
         self.input= {}
@@ -19,16 +19,17 @@ class YouTubeAgent(BaseAgent):
         self.flag= False    
         self.log_manager = LogConsumer(max_logs=200)
         self.log_manager.run()
-        self.log_consumer = LogConsumer(max_logs=200)  # 로그 200개 유지
+
         
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         # 입력 처리...
-        if "query" not in self.input["key"]:
+        self.input = state
+        if "query" not in self.input.keys():
             log_wrapper( "<<::STATE::ail error: query key is not in input>>")
             return {"fail error": "query key is not in input"}
         
         
-        self.query = self.input["dict"][0]["query"]
+        self.query = self.input["query"]
         try:
             log_wrapper(f"<<::STATE::inference_thread_started>>")
             # 서브스레드에서 실행하고 결과를 직접 받음
@@ -68,4 +69,13 @@ class YouTubeAgent(BaseAgent):
         self.flag= False        
         return a
     def clean(self):
-        self.log_consumer.stop()
+        self.log_manager.stop()
+
+
+
+if __name__ == "__main__":
+    
+    youtube_agent = YouTube_agent()
+    input_data = {"query": "애플 태블릿 추천해줘 "}
+    result=asyncio.run(youtube_agent.run(input_data))
+    youtube_agent.clean()

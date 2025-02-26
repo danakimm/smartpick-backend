@@ -15,6 +15,7 @@ globalist=[]
 
 def log_wrapper(log_message):
     globalist.append(log_message)
+
     add_log(log_message) 
      
 def truncate_text_by_tokens(text, max_tokens, model="gpt-4o-mini"):
@@ -491,15 +492,17 @@ class Keyword_filter():
         return index,result
     
 class RAGOUT():
-    def __new__(cls, filtter: Keyword_filter):
+    def __new__(cls, filtter: Keyword_filter,outs):
         if not filtter.RAG_available:
             return None  # 객체 생성 자체를 하지 않음 ❌
         return super().__new__(cls)  # 정상적인 경우에만 객체 생성 ✅
     
-    def __init__(self, filtter:Keyword_filter):
+    def __init__(self, filtter:Keyword_filter,outs):
         self.marker=False
         self.filtter = filtter 
+        
         self.enhanced_query=filtter.enhanced_query
+        
         self.RAG_out, self.result = self.filtter.RAG_search()  # 튜플 언패킹
         data=[0]*len(self.RAG_out)
         #filtter.dataloader.DataProcessor.data['테크몽'][1]['링크'][32]
@@ -931,7 +934,7 @@ def print_with_output(filtter,query):
         log_wrapper("재시도 로직 필요함")
         return retrun_fail_result() 
     log_wrapper(f"<<::STATE:: RETRIEVAL START>>")
-    RAG_out=RAGOUT(filtter)
+    RAG_out=RAGOUT(filtter,outs)
     log_wrapper(f"<<::STATE:: RETRIEVAL FNISH>>")
     log_wrapper(f"RAG 출력 : {RAG_out.sorted_result}")
     extractor=Video_extractor(RAG_out)
@@ -953,7 +956,7 @@ def print_with_output(filtter,query):
     log_wrapper(f'테스트 완료 추출 영상-> 제목 : {RAW['제목']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
     log_wrapper(f'테스트 완료 추출 영상-> 링크 : {RAW['링크']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
     log_wrapper(f' 키워드 : {RAW['태그']} 업로드일 :{RAW['업로드일']}')
-    if filtter.marker:
+    if RAG_out.marker:
         log_wrapper("<<::STATE::INFERENCE SUCCESSED>>")
     return out, ['llm_process_data','raw_meta_data'],RAG_out
     
@@ -965,7 +968,7 @@ if __name__ == "__main__":
     filtter=Keyword_filter()
     #filtter.dataloader.DataProcessor.set_day_limit()
     #filtter.dataloader.DataProcessor.make_hesh_dict()
-    query="디지털 아트웍 초심자가 다루기 좋은 태블릿 추천"
+    query="갤럭시 탭 s10 리뷰"
     filtter.enhance_query(query)
     neg,pos=filtter.get_keywords_sametime()
     outs,_=filtter.keyword_filter()
