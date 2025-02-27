@@ -35,16 +35,21 @@ def define_workflow():
     workflow = Graph()
 
     async def parallel_analysis(state: AgentState) -> Dict:
+        #
+        #youtube_results=await youtube_agent.run(state["youtube_agent_state"]["youtube_analysis"]),
+        #print("youtube_results", youtube_results)
+        #review_results=await review_agent.run(state["review_agent_state"]["review_analysis"]),    
+        #print("review_results", review_results)
+        spec_results=[]
         # 병렬로 실행하기 위해 asyncio.gather 사용
-        youtube_results, review_results, spec_results = await asyncio.gather(
+        youtube_results, review_results,spec_results = await asyncio.gather(
             # YouTube 분석은 아직 구현되지 않음
-            asyncio.sleep(0),  # 임시 placeholder
-            
+            # 임시 placeholder
             # Review 분석 실행
-            youtube_agent.run(state["review_agent_state"]["review_analysis"]),
+            youtube_agent.run(state["youtube_agent_state"]["youtube_analysis"]),
             review_agent.run(state["review_agent_state"]["review_analysis"]),
-            # Spec 분석은 아직 구현되지 않음
-            asyncio.sleep(0)  # 임시 placeholder
+            asyncio.sleep(0)
+
         )
         
         logger.debug(f"Review results: {review_results}")  # 로깅 추가
@@ -113,3 +118,6 @@ def define_workflow():
     workflow.set_finish_point("report_generation")
 
     return workflow
+
+def clean_agent():
+    youtube_agent.clean()

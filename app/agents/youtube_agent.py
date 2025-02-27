@@ -1,15 +1,17 @@
-from search import print_with_output, Keyword_filter
+
 from typing import Dict, Any
 import asyncio
-from base import BaseAgent
-from queue_manager import add_log, LogConsumer
+from .base import BaseAgent
+from .youtube_agent_module.queue_manager import add_log, LogConsumer
+
+from .youtube_agent_module.search import print_with_output, Keyword_filter
 globalist=[]
 
 def log_wrapper(log_message):
     globalist.append(log_message)
     add_log(log_message)
     
-class YouTube_agent(BaseAgent):
+class YouTubeAgent(BaseAgent):
     def __init__(self, name="youtube_agent"):
         self.name = name
         self.filtter= Keyword_filter()
@@ -75,7 +77,7 @@ class YouTube_agent(BaseAgent):
 
 if __name__ == "__main__":
     
-    youtube_agent = YouTube_agent()
+    youtube_agent = YouTubeAgent()
     input_data = {"query": "애플 태블릿 추천해줘 "}
     result=asyncio.run(youtube_agent.run(input_data))
     youtube_agent.clean()
