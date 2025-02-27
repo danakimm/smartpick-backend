@@ -1,5 +1,5 @@
 import asyncio
-from app.agents.graph import define_workflow
+from app.agents.graph import define_workflow, clean_agent
 from app.agents.question_agent import QuestionAgent
 import logging
 import os
@@ -84,12 +84,15 @@ async def test_workflow():
                 
                 if result is None:
                     print("워크플로우 실행 결과가 없습니다.")
+                    clean_agent()
                 else:
                     print(result.get("final_report", "추천 결과를 생성할 수 없습니다."))
+                    clean_agent()
             except Exception as e:
                 print(f"워크플로우 실행 중 오류 발생: {e}")
                 print("현재 상태:", initial_state)
+                clean_agent()
             break
 
 if __name__ == "__main__":
-    asyncio.run(test_workflow()) 
+    asyncio.run(test_workflow())
