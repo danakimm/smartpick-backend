@@ -7,7 +7,6 @@ import asyncio
 class AgentState(TypedDict):
     question: str
     sub_questions: list[str]
-    youtube_input: dict# {"query": str},{any: any}...
     youtube_results: dict
     review_results: dict
     spec_results: dict
@@ -42,7 +41,7 @@ def define_workflow():
             asyncio.sleep(0),  # 임시 placeholder
             
             # Review 분석 실행
-            youtube_agent.run(state.youtube_input),
+            youtube_agent.run(state["review_agent_state"]["review_analysis"]),
             review_agent.run(state["review_agent_state"]["review_analysis"]),
             # Spec 분석은 아직 구현되지 않음
             asyncio.sleep(0)  # 임시 placeholder
