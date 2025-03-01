@@ -1,137 +1,107 @@
+import asyncio
 import os
 import json
+import pandas as pd
 import re
 import logging
-import pandas as pd
-import asyncio
-from typing import Dict, Any, Tuple
-from openai import OpenAI
-from dotenv import load_dotenv
-from langchain_core.prompts import ChatPromptTemplate
+from typing import Dict, Any
+from langgraph.graph import StateGraph
+from app.agents.base import BaseAgent
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
 
-# 환경 변수 로드
+logger = logging.getLogger("smartpick.agents.spec_agent")
 load_dotenv()
 
-# 로깅 설정
-logger = logging.getLogger("product_recommender")
-
-class SpecRecommender:
-    def __init__(self):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.product_csv = os.path.join(base_dir, "documents", "product_details.csv")
+class SpecRecommender(BaseAgent):
+    def __init__(self, persist_directory: str = None):
+        super().__init__(name="SpecRecommender")
+        if persist_directory is None:
+            persist_directory = os.getenv("SPEC_DB_PATH", os.path.join(
+                os.path.dirname(__file__), "spec_db"
+            ))
+        self.persist_directory = persist_directory
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.")
-        self.client = OpenAI(api_key=self.openai_api_key)
-        logger.debug(f"SpecRecommender initialized with CSV file: {self.product_csv}")
+        logger.debug(f"SpecRecommend initialized with db path: {persist_directory}")
 
-    def extract_price(self, features_text: str) -> int:
-        """ 제품의 출시가를 추출하는 함수 """
-        features_text = str(features_text)
-        match = re.search(r"출시가:\s*([\d,]+)원", features_text)
-        if match:
-            return int(match.group(1).replace(",", ""))
-        return None
+    async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        logger.debug(f"Running ProductRecommender with state: {state}")
+        return await self.generate_recommendations(state)
 
-    def parse_price(self, price_text: str) -> int:
-        """ 가격을 숫자로 변환하는 함수 (예: 50만원 -> 500000) """
-        match = re.search(r"(\d+)만원", price_text)
-        if match:
-            return int(match.group(1)) * 10000
-        return None
-
-    def convert_user_price(self, price: Any) -> int:
-        """ 사용자 입력 가격을 변환하는 함수 (예: 50만원 -> 500000) """
-        if isinstance(price, str):
-            return self.parse_price(price) or 0
-        return price
-
-    async def summarize_features(self, context, user_input):
-        """ 제품 추천 시 장점(pros) 및 핵심 사항을 요약하는 함수 """
+    async def generate_recommendations(self, user_input: Dict[str, Any]) -> dict:
+        """제품 추천을 생성하는 함수."""
+        print("recommend 요구사항 : ", user_input)
+        context = await self.filter_products(user_input)
         if not context:
-            return None
+            return {"error": "적절한 제품을 찾을 수 없습니다."}
+        
+        recommendations = await self.summarize_features(context, user_input)
+        return recommendations if recommendations else {"error": "추천 생성 실패"}
 
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "당신은 제품 추천 AI입니다."},
-                {"role": "user", "content": f"""
-                사용자가 원하는 조건: {json.dumps(user_input, ensure_ascii=False, indent=4)}
-                제품 목록:
-                ```json
-                {json.dumps(context, ensure_ascii=False, indent=4)}
-                ```
-                """}
-            ],
-            temperature=0.3,
-        )
-
-        try:
-            response_text = response.choices[0].message.content.strip()
-            response_text = response_text.replace("```json", "").replace("```", "").strip()
-            return json.loads(response_text)
-        except json.JSONDecodeError:
-            logger.error("JSON 변환 실패: 응답 내용을 확인하세요.")
-            return None
-
-    async def generate_recommendations(self, user_input: Dict[str, Any]) -> Dict[str, Any]:
-        df = pd.read_csv(self.product_csv)
-        logger.info(f"제품 데이터 로드 완료: {df.shape[0]}개 제품")
-
-        # 사용자 입력 가격 변환
-        user_min_price = self.convert_user_price(user_input["가격_범위"].get("최소", 0))
-        user_max_price = self.convert_user_price(user_input["가격_범위"].get("최대", 50000000))
-
+    async def filter_products(self, user_input: dict) -> list:
+        """사용자의 요구 사항에 맞는 제품 필터링"""
+        df = pd.read_csv("C:/Users/hu612/Downloads/jh/smartpick-backend/app/agents/product_details.csv")
+        
         context = []
         for _, row in df.iterrows():
             product_name = row["name"]
             features_text = row.get("features_규격", "")
             product_price = self.extract_price(features_text)
             
-            if product_price is None:
-                parsed_price = self.parse_price(features_text)
-                product_price = parsed_price if parsed_price else 0
             
-            if not isinstance(product_price, int):
-                logger.warning(f"잘못된 가격 형식 감지: {product_name}, 가격 정보: {features_text}")
-                continue
-
-            if not (user_min_price <= product_price <= user_max_price):
+            if product_price is None or not (user_input["가격_범위"]["최소"]["value"] <= product_price <= user_input["가격_범위"]["최대"]["value"]):
                 continue
             if any(excluded in product_name for excluded in user_input.get("제외_스펙", [])):
                 continue
 
-            core_specs = [{"항목": key.replace("features_", ""), "사양": value} for key, value in row.items() if key.startswith("features_") and pd.notna(value)]
+            core_specs = [
+                {"항목": key.replace("features_", ""), "사양": value, "설명": "LLM이 해당 사양을 기반으로 설명을 생성합니다."}
+                for key, value in row.items() if key.startswith("features_") and pd.notna(value)
+            ]
 
-            context.append({
-                "제품명": product_name,
-                "가격": f"{product_price:,}원",
-                "핵심 사항": core_specs
-            })
+            context.append({"제품명": product_name, "가격": product_price, "핵심 사항": core_specs})
+        
+        return context[:15]  # 최대 15개 제품만 전달
+    
+    async def summarize_features(self, context, user_input):
+        """제품 추천을 요약하는 함수."""
+        
+        try:
+            # 최대 3개 제품 추천
+            recommended_products = [
+                {
+                    "제품명": item["제품명"],
+                    "가격": item["가격"],
+                    "추천 이유": {
+                        "pros": ["장점 1", "장점 2", "장점 3"],
+                        "cons": ["단점 1", "단점 2", "단점 3"]
+                    },
+                    "핵심 사항": [
+                        {
+                            "항목": spec["항목"],
+                            "사양": spec["사양"],
+                            "설명": spec["설명"]
+                        } for spec in item["핵심 사항"]
+                    ]
+                }
+                for item in context[:3]  # 최대 3개 제품 사용
+            ]
 
-        recommendations = await self.summarize_features(context, user_input)
-        return recommendations if recommendations else {"추천 제품": []}
-
-    async def run(self, user_input: Dict[str, Any]) -> Dict[str, Any]:
-        """ 워크플로우 실행 메서드 """
-        return await self.generate_recommendations(user_input)
-
-if __name__ == "__main__":
-    async def main():
-        recommender = SpecRecommender()
-        user_input = {
-            '필수_스펙': {  
-                            '성능': ['우수한 펜 반응속도'], 
-                            '하드웨어': ['13인치 화면'], 
-                            '기능': ['드로잉 앱 지원']
-                            },
-            '가격_범위': {  
-                            '최소': '50만원', 
-                            '최대': '100만원'
-                            }
-        }
-        recommendations = await recommender.run(user_input)
-        print(json.dumps(recommendations, indent=4, ensure_ascii=False))
-
-    asyncio.run(main())
+            response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
+                {"role": "system", "content": "당신은 제품 추천 AI입니다. 문서에서 '항목'과 '사양'을 가져오되, 사양을 보기 좋게 요약하고, 이를 기반으로 설명을 생성하여 JSON으로 반환하세요."},
+                {"role": "user", "content": json.dumps({"추천 제품": recommended_products}, ensure_ascii=False)}
+            ])
+            
+            response_text = response.content.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()  # 코드 블록 제거
+            print("LLM 응답:", response_text)
+            return json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
+            return None
+    
+    def extract_price(self, features_text):
+        """제품의 출시가를 추출하는 함수."""
+        match = re.search(r"출시가:\s*([\d,]+)원", str(features_text))
+        return int(match.group(1).replace(",", "")) if match else None
