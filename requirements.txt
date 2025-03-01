@@ -2,26 +2,26 @@
 openai
 python-dotenv
 tiktoken
-numpy
-pandas
+numpy==1.26.4
+pandas==2.2.3
 faiss-cpu
 h5py
-pydantic
+pydantic==2.10.6
 
 # LangChain dependencies
-langchain
-langchain-openai
+langchain==0.3.18
+langchain-openai==0.3.5
 langchain-upstage
-langchain-core
-langchain-community
-langchain-text-splitters
+langchain-core==0.3.34
+langchain-community==0.3.17
+langchain-text-splitters==0.3.6
 
 # Web APIs and services
-fastapi
-uvicorn  # FastAPI 서버를 실행하기 위한 ASGI 서버
+fastapi==0.115.8
+uvicorn==0.34.0  # FastAPI 서버를 실행하기 위한 ASGI 서버
 
 # Vector databases
-chromadb
+chromadb==0.6.3
 
 # Web scraping and data processing
 beautifulsoup4
@@ -33,7 +33,7 @@ pyyaml
 
 # 원래있던거
 sqlalchemy
-langgraph
-anthropic
-emoji
-langchain_chroma
+langgraph==0.2.71
+anthropic==0.46.0
+emoji==2.14.1
+langchain_chroma==0.2.2
