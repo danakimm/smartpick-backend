@@ -18,7 +18,7 @@ langchain-text-splitters==0.3.6
 
 # Web APIs and services
 fastapi==0.115.8
-uvicorn==0.34.0  # FastAPI 서버를 실행하기 위한 ASGI 서버
+uvicorn==0.34.0
 
 # Vector databases
 chromadb==0.6.3
@@ -30,8 +30,7 @@ beautifulsoup4
 requests
 pyyaml
 
-
-# 원래있던거
+# original
 sqlalchemy
 langgraph==0.2.71
 anthropic==0.46.0
