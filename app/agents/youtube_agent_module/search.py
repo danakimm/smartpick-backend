@@ -187,8 +187,8 @@ class keyword_finder:
             해당 쿼리만으로는 RAG에 저장된 자막 자료로 원하는 영상을 제대로 찾지 못할것으로 예상됩니다.
             목표:
             쿼리의 목적을 보다 명확히 표현해야 합니다.또한 벡터 공간 상에서 더욱 강력한 방향성을 가져 검색이 용이하도록 해주세요.
-            RAG가 실제로 ‘{query}’ 와 관련된 정보를 담은 영상을 잘 찾을 수 있도록 관련 키워드를 추가해 주세요.
-            사용자가 궁극적으로 원하는 것은 “{query}와 관련된 특징을 요약하거나 인상적인 부분을 보여주는 클립 영상”임을 반영하세요.
+            RAG가 실제로 '{query}' 와 관련된 정보를 담은 영상을 잘 찾을 수 있도록 관련 키워드를 추가해 주세요.
+            사용자가 궁극적으로 원하는 것은 "{query}와 관련된 특징을 요약하거나 인상적인 부분을 보여주는 클립 영상"임을 반영하세요.
             이후에는 context에 태그를 추가하는 llm도 있습니다 그에 도움이되게 제조사나 목적을 명확히 파악 할 수 있는 문구를 추가해주세요
             [중요사항]
             이것은 절대적으로 지켜야할 사항입니다 답변에는 어떠한 "부가설명이 있어서는 안됩니다" 반드시 "쿼리만을 포함"하세요
@@ -686,7 +686,7 @@ class Video_extractor():
                                     - 유저 요청(abstract)을 분석하고, 그 안에 담긴 요구사항(조건)들을 우선순위대로 정리한다.
                                     - 최종 출력은 **우선순위대로 번호를 붙여** 상세 설명 형태로 작성한다. 
                                     - 중간 단계(조건 개수 파악, 우선순위 결정 등)는 절대 출력하지 말 것.
-                                    - 오직 “우선순위별 조건 설명”만 출력하라.
+                                    - 오직 "우선순위별 조건 설명"만 출력하라.
                                 """
         self.slave_prompt = """
                             너의 역할:
@@ -701,7 +701,7 @@ class Video_extractor():
                             - 리뷰 스크립트는 실제 발화 내용 그대로라서 문법이 다소 불규칙할 수 있음. 
                             - 중간 과정(1번, 2번 단계 탐색)은 절대 출력하지 말고, 최종 결과만 출력할 것.
                             - 만약 중요사항과 직접 관련 없는 문구라면, 답변하지 말고 다시 스크립트를 확인해(내부적으로) 
-                            ‘직접 관련이 있는 문구’만 최종 결과에 포함하라.
+                            '직접 관련이 있는 문구'만 최종 결과에 포함하라.
                         """
         self.slave_prompt_srt = """
                                 너의 역할:
@@ -720,7 +720,7 @@ class Video_extractor():
                                 주의 사항:
                                 - 절대 이 4줄 이외의 내용(문장, 기호, 해설)을 추가 출력하지 마라.
                                 - 단 하나의 시간대(클립)만 결정해야 한다.
-                                - 만약 ‘중요사항’과 정확히 연결된 구간이 없다고 판단되면, 답변을 하지 말거나 “연관 구간이 없습니다.”라고만 출력.
+                                - 만약 '중요사항'과 정확히 연결된 구간이 없다고 판단되면, 답변을 하지 말거나 "연관 구간이 없습니다."라고만 출력.
                                 - 중간 단계(0,1,2,3 등)는 절대 출력하지 말고, 요구된 최종 포맷만 반환할 것.
                             """ 
         self.short_cut_prompt = """
@@ -960,10 +960,10 @@ def print_with_output(filtter,query):
             log_wrapper(f'주요 장면 {q} : {i}')
     else:
         log_wrapper(f'{LLMO["descriptions"]}')
-    log_wrapper(f' 클립 : {LLMO['clip']}')
-    log_wrapper(f'테스트 완료 추출 영상-> 제목 : {RAW['제목']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
-    log_wrapper(f'테스트 완료 추출 영상-> 링크 : {RAW['링크']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
-    log_wrapper(f' 키워드 : {RAW['태그']} 업로드일 :{RAW['업로드일']}')
+    log_wrapper(f' 클립 : {LLMO["clip"]}')  # 작은따옴표를 큰따옴표로 변경
+    log_wrapper(f'테스트 완료 추출 영상-> 제목 : {RAW["제목"]}\n 입력 쿼리 :{RAG_out.enhanced_query}')
+    log_wrapper(f'테스트 완료 추출 영상-> 링크 : {RAW["링크"]}\n 입력 쿼리 :{RAG_out.enhanced_query}')
+    log_wrapper(f' 키워드 : {RAW["태그"]} 업로드일 :{RAW["업로드일"]}')
     if RAG_out.marker:
         log_wrapper("<<::STATE::INFERENCE SUCCESSED>>")
     outputdict={}
@@ -1002,9 +1002,9 @@ if __name__ == "__main__":
             log_wrapper(f'주요 장면 {q} : {i}')
     else:
         log_wrapper(f'{LLMO["descriptions"]}')
-    log_wrapper(f' 클립 : {LLMO['clip']}')
-    log_wrapper(f'테스트 완료 추출 영상-> 제목 : {RAW['제목']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
-    log_wrapper(f'테스트 완료 추출 영상-> 링크 : {RAW['링크']}\n 입력 쿼리 :{RAG_out.enhanced_query}')
-    log_wrapper(f' 키워드 : {RAW['태그']} 업로드일 :{RAW['업로드일']}')
+    log_wrapper(f' 클립 : {LLMO["clip"]}')
+    log_wrapper(f'테스트 완료 추출 영상-> 제목 : {RAW["제목"]}\n 입력 쿼리 :{RAG_out.enhanced_query}')
+    log_wrapper(f'테스트 완료 추출 영상-> 링크 : {RAW["링크"]}\n 입력 쿼리 :{RAG_out.enhanced_query}')
+    log_wrapper(f' 키워드 : {RAW["태그"]} 업로드일 :{RAW["업로드일"]}')
     
     

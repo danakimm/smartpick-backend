@@ -420,7 +420,7 @@ class Dataprocessor:
                         buff2=re.sub(r'[-:\d>]', '', content)
                         buff3=buff2.replace(" ,"," ").replace(", ","")
                         subscript=buff3.replace("\n\n\n","\n").replace("\n \n","\n")
-                        checker=self.indexer.add_script(f'자막: [{subscript}], 영상 설명 : [{self.data[root.split('/')[-1]][1].loc[int(file_path.split('/')[-1].split('.')[-2]),"설명"].replace("/","").replace("/n","")}]')
+                        checker=self.indexer.add_script(f'자막: [{subscript}], 영상 설명 : [{self.data[root.split("/")[-1]][1].loc[int(file_path.split("/")[-1].split(".")[-2]),"설명"].replace("/","").replace("/n","")}]')
 
                         if checker:
                             if self.mode=="excelerator":
@@ -472,7 +472,7 @@ class Dataprocessor:
                             self.data[root.split('/')[-1]][1].at[int(file_path.split('/')[-1].split('.')[-2]),"태그"]=[tag]
                             self.data[root.split('/')[-1]][1].at[int(file_path.split('/')[-1].split('.')[-2]),"자막요약"]=[descriptions]
                             self.data[root.split('/')[-1]][1].at[int(file_path.split('/')[-1].split('.')[-2]),"코드"]=[code]
-                            log_wrapper(f"태그 {self.data[root.split('/')[-1]][1].at[int(file_path.split('/')[-1].split('.')[-2]),"태그"]},코드:{code},누적토큰:{full_tocken}// 처리량: {totn}//총량:{maxlen}") 
+                            log_wrapper(f"태그 {self.data[root.split('/')[-1]][1].at[int(file_path.split('/')[-1].split('.')[-2]), '태그']},코드:{code},누적토큰:{full_tocken}// 처리량: {totn}//총량:{maxlen}")
                         except Exception as e:
                             self.data[root.split('/')[-1]][1].loc[int(file_path.split('/')[-1].split('.')[-2]),"태그"]=["Failed set the Tag You Idiot"]
                     except Exception as e:
