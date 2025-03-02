@@ -175,3 +175,7 @@ cython_debug/
 
 # config file for api key
 .env
+app/agents/youtube_agent_module/copydata
+# tablet_reviews_db 폴더 내의 Python 파일을 제외한 모든 파일 무시
+app/agents/tablet_reviews_db/*
+!app/agents/tablet_reviews_db/*.py
