@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
-# from langchain_anthropic import ChatAnthropic 
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from typing import Dict, Any, List
 from .base import BaseAgent
 import logging
@@ -14,8 +13,7 @@ load_dotenv()
 class QuestionAgent(BaseAgent):
     def __init__(self):
         super().__init__("question_agent")
-        # self.llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=os.getenv("OPENAI_API_KEY"))
+        self.llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.prompts = {
             'initial': "안녕하세요! 어떤 태블릿을 찾고 계신지 편하게 말씀해 주세요 😊",
             'analyze_response': """당신은 사용자의 태블릿 구매 요구사항을 분석하는 AI 시스템입니다.
