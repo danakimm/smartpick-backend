@@ -16,13 +16,10 @@ load_dotenv()
 class SpecRecommender(BaseAgent):
     def __init__(self, persist_directory: str = None):
         super().__init__(name="SpecRecommender")
-        if persist_directory is None:
-            persist_directory = os.getenv("SPEC_DB_PATH", os.path.join(
-                os.path.dirname(__file__), "spec_db"
-            ))
+        self.product_csv = os.getenv("SPEC_DB_PATH")
         self.persist_directory = persist_directory
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        logger.debug(f"SpecRecommend initialized with db path: {persist_directory}")
+        logger.debug(f"SpecRecommend initialized with db path: {self.product_csv}")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug(f"Running ProductRecommender with state: {state}")
@@ -40,7 +37,7 @@ class SpecRecommender(BaseAgent):
 
     async def filter_products(self, user_input: dict) -> list:
         """사용자의 요구 사항에 맞는 제품 필터링"""
-        df = pd.read_csv("C:/Users/hu612/Downloads/jh/smartpick-backend/app/agents/product_details.csv")
+        df = pd.read_csv(self.product_csv)
         
         context = []
         for _, row in df.iterrows():

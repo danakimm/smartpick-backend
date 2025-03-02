@@ -1,10 +1,9 @@
 from typing import Dict, Any
 import os
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import json
-from app.agents.review_db_manager import ReviewDBManager
+from app.agents.tablet_reviews_db.review_db_manager import ReviewDBManager
 from dotenv import load_dotenv
 from .base import BaseAgent
 import logging

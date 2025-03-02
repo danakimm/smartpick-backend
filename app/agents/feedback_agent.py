@@ -7,7 +7,7 @@ import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("smartpick.agents.feedback_agent")
 
 load_dotenv()
 

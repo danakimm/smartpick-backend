@@ -8,7 +8,7 @@ from spec_agent import SpecRecommender
 from review_agent import ReviewRecommender
 
 # 로깅 설정
-logger = logging.getLogger("middleware_agent")
+logger = logging.getLogger("smartpick.agents.middleware_agent")
 
 class BaseAgent:
     async def run(self, state: Dict[str, Any]):
