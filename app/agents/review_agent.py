@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -92,7 +92,8 @@ class ProductRecommender(BaseAgent):
             relevant_reviews = self.db_manager.search_reviews(
                 query=query,
                 similarity_threshold=0.6,
-                max_results=20
+                max_results=20,
+                exact_product_match=False
             )
             all_reviews.extend(relevant_reviews)
 
@@ -203,18 +204,48 @@ class ProductRecommender(BaseAgent):
         3. 리뷰에 없는 기능이나 특징을 임의로 추가하면 안됩니다
         4. 사용자의 구체적인 요구사항(사용 환경, 사용 시간 등)에 맞춰 추천해주세요
         5. 추천할 때는 반드시 관련된 실제 리뷰를 인용하고, 해당 리뷰의 출처 플랫폼을 명시해주세요
-        6. 제시된 형식을 정확히 따라주세요"""
+        6. 제시된 형식을 정확히 따라주세요
+        7. 응답은 반드시 JSON 형식으로 제공해야 합니다"""
 
-        human_template = """다음 형식으로 정확히 추천해주세요:
-        1. 최우선 추천 태블릿
-           - 제품명
-           - 추천 이유 (실제 리뷰 인용 포함, 출처 플랫폼 명시)
-           - 사용자의 구체적 요구사항(사용 환경, 관심사 등)과의 적합성 설명
-
-        2. 차선책 추천 태블릿
-           - 제품명
-           - 첫 번째 추천 제품과의 차이점 (실제 리뷰 인용 필수, 출처 플랫폼 명시)
-           - 사용자의 구체적 요구사항(사용 환경, 관심사 등)과의 적합성 설명"""
+        human_template = """다음 JSON 형식으로 정확히 추천해주세요:
+        ```json
+        {
+          "recommendations": [
+            {
+              "rank": 1,
+              "product_name": "최우선 추천 태블릿 이름",
+              "reasons": [
+                "추천 이유 1 (실제 리뷰 인용 포함)",
+                "추천 이유 2 (실제 리뷰 인용 포함)"
+              ],
+              "suitability": [
+                "사용자 요구사항과의 적합성 1",
+                "사용자 요구사항과의 적합성 2"
+              ],
+              "review_sources": ["플랫폼1", "플랫폼2"]
+            },
+            {
+              "rank": 2,
+              "product_name": "차선책 추천 태블릿 이름",
+              "reasons": [
+                "추천 이유 1 (실제 리뷰 인용 포함)",
+                "추천 이유 2 (실제 리뷰 인용 포함)"
+              ],
+              "suitability": [
+                "사용자 요구사항과의 적합성 1",
+                "사용자 요구사항과의 적합성 2"
+              ],
+              "differences": [
+                "첫 번째 추천 제품과의 차이점 1",
+                "첫 번째 추천 제품과의 차이점 2"
+              ],
+              "review_sources": ["플랫폼1", "플랫폼2"]
+            }
+          ]
+        }
+        ```
+        
+        반드시 유효한 JSON 형식으로 응답해야 합니다. 추가 설명이나 마크다운 포맷은 사용하지 마세요."""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_template),
@@ -238,10 +269,18 @@ class ProductRecommender(BaseAgent):
         # ChatGPT를 통한 추천 생성
         chain = prompt | ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key)
         result = chain.invoke(prompt_data)
-
-        return {
-            "recommendations": result.content,
-        }
+        
+        # JSON 파싱 시도
+        try:
+            recommendations_json = json.loads(result.content)
+            return recommendations_json
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시 원본 텍스트 반환
+            logger.warning("Failed to parse recommendation as JSON, returning raw text")
+            return {
+                "recommendations": result.content,
+                "format_error": "Failed to parse as JSON"
+            }
 
     def _analyze_review_sentiment(self, review_text: str) -> Dict[str, Any]:
         """리뷰 텍스트의 감성 분석"""
@@ -281,6 +320,203 @@ class ProductRecommender(BaseAgent):
                 "satisfaction_points": [],
                 "dissatisfaction_points": []
             }
+            
+###---------- 최종 제품 추천 이후 제품 통계 정보 수집 ----------###
+    def get_product_insights(self, product_name: str) -> Dict[str, Any]:
+        """특정 제품에 대한 종합적인 리뷰 인사이트를 제공합니다."""
+        logger.debug(f"Retrieving comprehensive insights for product: {product_name}")
+        
+        # 제품명으로 리뷰 검색
+        reviews = self.db_manager.search_reviews(
+            query=product_name,
+            similarity_threshold=0.7,
+            max_results=200,  # 충분한 리뷰 확보
+            exact_product_match=True
+        )
+        
+        if not reviews:
+            logger.warning(f"No reviews found for product: {product_name}")
+            return {
+                "product_name": product_name,
+                "error": "제품에 대한 리뷰를 찾을 수 없습니다."
+            }
+        
+        # 기본 통계 계산
+        total_reviews = len(reviews)
+        ratings = [review.get('rating', 0) for review in reviews if 'rating' in review]
+        avg_rating = sum(ratings) / len(ratings) if ratings else 0
+        
+        # 긍정/부정 리뷰 분류
+        positive_reviews = [review for review in reviews if review.get('rating', 0) >= 4]
+        negative_reviews = [review for review in reviews if review.get('rating', 0) <= 3]
+        
+        # 긍/부정 리뷰 비율 계산
+        positive_ratio = len(positive_reviews) / total_reviews * 100 if total_reviews > 0 else 0
+        negative_ratio = len(negative_reviews) / total_reviews * 100 if total_reviews > 0 else 0
+        
+        # 리뷰 데이터 준비
+        review_data = {
+            "product_name": product_name,
+            "total_reviews": total_reviews,
+            "average_rating": round(avg_rating, 1),
+            "positive_ratio": round(positive_ratio, 1),
+            "negative_ratio": round(negative_ratio, 1),
+            "positive_reviews": positive_reviews[:10],  # 상위 10개 긍정 리뷰
+            "negative_reviews": negative_reviews[:10]   # 상위 10개 부정 리뷰
+        }
+        
+        # LLM에게 리뷰 분석 요청
+        return self._analyze_reviews_with_llm(review_data)
+    
+    def _analyze_reviews_with_llm(self, review_data: Dict[str, Any]) -> Dict[str, Any]:
+        """LLM을 사용하여 리뷰 데이터를 종합적으로 분석합니다."""
+        
+        # 리뷰 텍스트 준비
+        positive_review_texts = []
+        for idx, review in enumerate(review_data["positive_reviews"][:4], 1):
+            platform = review.get('platform', '알 수 없음')
+            usage_period = review.get('usage_period', '알 수 없음')
+            text = review.get('text', '')
+            positive_review_texts.append(f"[긍정 리뷰 {idx} - {platform}, 사용기간: {usage_period}]\n{text}")
+        
+        negative_review_texts = []
+        for idx, review in enumerate(review_data["negative_reviews"][:4], 1):
+            platform = review.get('platform', '알 수 없음')
+            usage_period = review.get('usage_period', '알 수 없음')
+            text = review.get('text', '')
+            negative_review_texts.append(f"[부정 리뷰 {idx} - {platform}, 사용기간: {usage_period}]\n{text}")
+        
+        # 프롬프트 템플릿
+        system_template = """당신은 제품 리뷰 분석 전문가입니다. 
+        주어진 제품 리뷰 데이터를 분석하여 종합적인 인사이트를 제공해주세요.
+        
+        다음 정보를 포함해야 합니다:
+        1. 긍정적 리뷰 요약 (최대 3개)
+        2. 부정적 리뷰 요약 (최대 3개)
+        3. 장점에 해당하는 리뷰 (최소 3개)
+        4. 단점에 해당하는 리뷰 (최소 3개)
+        
+        응답은 반드시 JSON 형식으로 제공해야 합니다."""
+
+        human_template = """다음은 {product_name}에 대한 리뷰 데이터입니다:
+        
+        총 리뷰 수: {total_reviews}개
+        평균 평점: {average_rating}점
+        긍정 리뷰 비율: {positive_ratio}%
+        부정 리뷰 비율: {negative_ratio}%
+        
+        [긍정적 리뷰 샘플]
+        {positive_reviews}
+        
+        [부정적 리뷰 샘플]
+        {negative_reviews}
+        
+        위 데이터를 분석하여 다음 JSON 형식으로 응답해주세요:
+        ```json
+        {{
+          "positive_review_summaries": [
+            "긍정 리뷰 1 요약",
+            "긍정 리뷰 2 요약",
+            "긍정 리뷰 3 요약",
+            "긍정 리뷰 4 요약"
+          ],
+          "negative_review_summaries": [
+            "부정 리뷰 1 요약",
+            "부정 리뷰 2 요약",
+            "부정 리뷰 3 요약",
+            "부정 리뷰 4 요약"
+          ],
+          "key_strengths": [
+            "주요 장점 1",
+            "주요 장점 2",
+            "주요 장점 3"
+          ],
+          "key_weaknesses": [
+            "주요 단점 1",
+            "주요 단점 2",
+            "주요 단점 3"
+          ]
+        }}
+        ```"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+        
+        # LLM 호출
+        chain = prompt | ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0.2, 
+            api_key=self.openai_api_key
+        )
+        
+        # 프롬프트 데이터 준비
+        prompt_data = {
+            "product_name": review_data["product_name"],
+            "total_reviews": review_data["total_reviews"],
+            "average_rating": review_data["average_rating"],
+            "positive_ratio": review_data["positive_ratio"],
+            "negative_ratio": review_data["negative_ratio"],
+            "positive_reviews": "\n\n".join(positive_review_texts),
+            "negative_reviews": "\n\n".join(negative_review_texts)
+        }
+        
+        # LLM 호출 및 결과 파싱
+        result = chain.invoke(prompt_data)
+        
+        try:
+            # JSON 파싱
+            insights = json.loads(result.content)
+            
+            # 기본 통계 정보 추가
+            insights["product_name"] = review_data["product_name"]
+            insights["total_reviews"] = review_data["total_reviews"]
+            insights["average_rating"] = review_data["average_rating"]
+            insights["positive_ratio"] = review_data["positive_ratio"]
+            insights["negative_ratio"] = review_data["negative_ratio"]
+            
+            # 원본 리뷰 추가
+            insights["original_positive_reviews"] = [
+                {
+                    "text": review.get('text', ''),
+                    "rating": review.get('rating', 0),
+                    "platform": review.get('platform', '알 수 없음'),
+                    "usage_period": review.get('usage_period', '알 수 없음')
+                }
+                for review in review_data["positive_reviews"][:4]
+            ]
+            
+            insights["original_negative_reviews"] = [
+                {
+                    "text": review.get('text', ''),
+                    "rating": review.get('rating', 0),
+                    "platform": review.get('platform', '알 수 없음'),
+                    "usage_period": review.get('usage_period', '알 수 없음')
+                }
+                for review in review_data["negative_reviews"][:4]
+            ]
+            
+            return insights
+            
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시
+            logger.warning("Failed to parse LLM response as JSON")
+            return {
+                "product_name": review_data["product_name"],
+                "error": "리뷰 분석 결과를 JSON으로 파싱할 수 없습니다.",
+                "raw_response": result.content
+            }
+    
+    async def get_final_product_review_insights(self, product_name: str) -> Dict[str, Any]:
+        """최종 추천 제품에 대한 리뷰 인사이트를 비동기적으로 제공합니다."""
+        logger.debug(f"Retrieving review insights for final product: {product_name}")
+        
+        # 비동기 처리를 위한 래핑
+        import asyncio
+        
+        # 리뷰 분석 실행 (CPU 바운드 작업이므로 스레드 풀에서 실행)
+        return await asyncio.to_thread(self.get_product_insights, product_name)
 
 # 사용 예시
 if __name__ == "__main__":

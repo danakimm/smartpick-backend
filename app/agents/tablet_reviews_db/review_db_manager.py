@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import re
 import emoji
-from typing import List, Dict
+from typing import List, Dict, Any
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
@@ -178,40 +178,83 @@ class ReviewDBManager:
             "제품 목록": sorted(list(products))
         }
 
-    def search_reviews(self,
-                       query: str,
-                       filter_conditions: Dict = None,
-                       similarity_threshold: float = 0.7,
-                       max_results: int = 20) -> List[Dict]:
-        """키워드로 리뷰를 검색합니다"""
+    def search_reviews(
+        self, 
+        query: str, 
+        similarity_threshold: float = 0.7, 
+        max_results: int = 20,
+        exact_product_match: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        리뷰 검색 메서드
+        
+        Args:
+            query: 검색 쿼리 또는 제품명
+            similarity_threshold: 유사도 임계값
+            max_results: 최대 결과 수
+            exact_product_match: 정확한 제품명 일치 검색 여부
+        """
         if not self.vector_store:
             return []
-
-        # score 포함하여 검색
-        results = self.vector_store.similarity_search_with_relevance_scores(
-            query,
-            k=max_results,
-            filter=filter_conditions
-        )
-
-        # 유사도 임계값 기반 필터링
-        filtered_results = [
-            (doc, score) for doc, score in results
-            if score >= similarity_threshold
-        ]
-
-        reviews = []
-        for doc, score in filtered_results:
-            reviews.append({
-                'text': doc.page_content,
-                'product': doc.metadata['product'],
-                'price': doc.metadata.get('price', float('nan')),
-                'rating': doc.metadata['rating'],
-                'platform': doc.metadata.get('platform', '플랫폼 정보 없음'),
-                'similarity_score': score
-            })
-
-        return reviews
+        
+        try:
+            # 정확한 제품명 일치 검색인 경우
+            if exact_product_match:
+                # 제품명으로 직접 필터링하여 검색
+                results = self.vector_store.get(
+                    where={"product": query},
+                    limit=max_results
+                )
+                
+                reviews = []
+                for i in range(len(results['documents'])):
+                    review_data = {
+                        'text': results['documents'][i],
+                        'product': results['metadatas'][i].get('product', ''),
+                        'rating': results['metadatas'][i].get('rating', 0),
+                        'platform': results['metadatas'][i].get('platform', ''),
+                        'usage_period': results['metadatas'][i].get('usage_period', ''),
+                        'pros': results['metadatas'][i].get('pros', ''),
+                        'cons': results['metadatas'][i].get('cons', ''),
+                        'similarity_score': 1.0  # 정확히 일치하므로 최대 유사도
+                    }
+                    reviews.append(review_data)
+                
+                return reviews
+            
+            # 유사도 기반 검색인 경우
+            else:
+                results = self.vector_store.similarity_search_with_relevance_scores(
+                    query,
+                    k=max_results * 2  # 필터링 후 충분한 결과를 얻기 위해 더 많은 결과 검색
+                )
+                
+                # 유사도 임계값 기반 필터링 (높을수록 더 유사)
+                filtered_results = [
+                    (doc, score) for doc, score in results
+                    if score >= similarity_threshold
+                ]
+                
+                reviews = []
+                for doc, score in filtered_results[:max_results]:  # 최대 결과 수 제한
+                    review_data = {
+                        'text': doc.page_content,
+                        'product': doc.metadata.get('product', ''),
+                        'rating': doc.metadata.get('rating', 0),
+                        'platform': doc.metadata.get('platform', ''),
+                        'usage_period': doc.metadata.get('usage_period', ''),
+                        'pros': doc.metadata.get('pros', ''),
+                        'cons': doc.metadata.get('cons', ''),
+                        'similarity_score': score
+                    }
+                    reviews.append(review_data)
+                
+                return reviews
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error searching for reviews: {str(e)}")
+            return []
 
     def get_reviews_by_criteria(self,
                               min_rating: float = None,
