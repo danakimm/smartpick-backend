@@ -11,6 +11,7 @@ VERSION = "0.1.0"
 # API 키
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY_YTB = os.getenv("OPENAI_API_KEY_YTB", "")
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 
 # 데이터베이스 경로
