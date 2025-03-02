@@ -24,7 +24,6 @@ class AgentState(TypedDict):
 from .question_agent import QuestionAgent
 from .review_agent import ProductRecommender
 from .spec_agent import SpecRecommender
-# from .spec_agent import SpecAgent
 from .youtube_agent import YouTubeAgent
 # from .middleware_agent import MiddlewareAgent
 # from .report_agent import ReportAgent
@@ -43,7 +42,6 @@ logger = logging.getLogger("smartpick.agents.graph")
 def define_workflow():
     logger.debug("Defining workflow")
     workflow = Graph()
-
 
     async def parallel_analysis(state: AgentState) -> Dict:
         # 병렬로 실행하기 위해 asyncio.gather 사용

@@ -68,15 +68,6 @@ async def test_workflow():
             # 워크플로우 실행
             app = workflow.compile()
             try:
-                # tablet_reviews_db 경로 설정
-                os.environ["REVIEW_DB_PATH"] = os.path.join(
-                    os.path.dirname(__file__), 
-                    "..", 
-                    "app", 
-                    "agents",
-                    "tablet_reviews_db"
-                )
-                
                 result = await app.ainvoke(initial_state)
                 print("\n=== 최종 추천 결과 ===")
                 print("DEBUG - Result type:", type(result))  # result의 타입 확인
