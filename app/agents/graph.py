@@ -1,4 +1,4 @@
-from langgraph.graph import Graph
+from langgraph.graph import Graph, END
 from typing import Dict, TypedDict, Annotated, Sequence
 import operator
 import logging
@@ -7,6 +7,9 @@ import asyncio
 class AgentState(TypedDict):
     question: str
     sub_questions: list[str]
+    review_agent_state: dict  # review_agent 상태 정보
+    spec_agent_state: dict  # spec_agent 상태 정보
+    youtube_agent_state: dict  # youtube_agent 상태 정보
     youtube_results: dict
     review_results: dict
     spec_results: dict
@@ -108,24 +111,30 @@ def define_workflow():
     async def handle_feedback(state: AgentState) -> Dict:
         logger.debug(f"Processing feedback: {state['feedback']}")
         
-        # process_feedback 대신 run 메서드 사용
         feedback_result = await feedback_agent.run({
             "feedback": state["feedback"],
             "original_requirements": state["question"],
             "current_recommendations": state["middleware_results"]
         })
         
-        if feedback_result["feedback_type"] == "refinement":
+        feedback_type = feedback_result["feedback_type"]
+        
+        if feedback_type == "refinement":
             # 기존 분석 결과와 새로운 요구사항으로 재분석 실행
             new_state = {
                 **state,
                 "question": feedback_result["refined_requirements"],
+                "feedback_type": feedback_type,  # feedback_type 추가
+                "refined_requirements": feedback_result["refined_requirements"]  # refined_requirements 추가
             }
-            return await parallel_analysis(new_state)
+            result = await parallel_analysis(new_state)
+            result["feedback_type"] = feedback_type  # 결과에도 feedback_type 추가
+            return result
         else:
             # 단순 질문에 대한 직접 응답
             return {
-                "feedback_response": feedback_result["response"]
+                "feedback_response": feedback_result["response"],
+                "feedback_type": feedback_type  # feedback_type 추가
             }
 
     # 노드 추가
@@ -139,21 +148,21 @@ def define_workflow():
     workflow.add_edge("parallel_analysis", "middleware_processing")
     workflow.add_edge("middleware_processing", "report_generation")
     
-    # report_generation에서 handle_feedback으로 가는 조건부 엣지 추가
+
     workflow.add_conditional_edges(
         "report_generation",
-        condition=lambda x: "feedback" in x,  # 피드백이 있는 경우
-        edges={
+        path=lambda x: "feedback" in x,
+        path_map={
             True: "handle_feedback",  # 피드백이 있으면 피드백 처리로
-            False: None  # 피드백이 없으면 워크플로우 종료
+            False: END  # None 대신 END 사용
         }
     )
     
     # 피드백 처리 후의 조건부 엣지
     workflow.add_conditional_edges(
         "handle_feedback",
-        condition=lambda x: x["feedback_type"] == "refinement",
-        edges={
+        path=lambda x: x["feedback_type"] == "refinement",
+        path_map={
             True: "parallel_analysis",  # 재분석 필요시
             False: "report_generation"  # 단순 질문시
         }

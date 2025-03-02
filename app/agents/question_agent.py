@@ -248,18 +248,27 @@ class QuestionAgent(BaseAgent):
             "conversation_history": [],
             "requirements": None
         }
-    
+
     async def _prepare_agent_states(self, requirements: str) -> Dict[str, Any]:
-        spec_agent_state = await self._prepare_spec_agent_state(requirements)
-        review_agent_state = await self._prepare_review_agent_state(requirements)
-        youtube_agent_state = await self._prepare_youtube_agent_state(requirements)
-        
-        return {
-            "youtube_agent_state": youtube_agent_state,
-            "review_agent_state": review_agent_state,
-            "spec_agent_state": spec_agent_state
-        }
-    
+        try:
+            spec_agent_state = await self._prepare_spec_agent_state(requirements)
+            review_agent_state = await self._prepare_review_agent_state(requirements)
+            youtube_agent_state = await self._prepare_youtube_agent_state(requirements)
+
+            return {
+                "youtube_agent_state": youtube_agent_state,
+                "review_agent_state": review_agent_state,
+                "spec_agent_state": spec_agent_state
+            }
+        except Exception as e:
+            logger.error(f"Error in _prepare_agent_states: {e}")
+            # 에러 발생 시 빈 상태 반환하여 워크플로우가 계속 진행될 수 있도록 함
+            return {
+                "youtube_agent_state": {"youtube_analysis": {}},
+                "review_agent_state": {"review_analysis": {}},
+                "spec_agent_state": {"spec_analysis": {}}
+            }
+
     async def _prepare_spec_agent_state(self, requirements: str) -> Dict[str, Any]:
         try:
             prompt = f"""
@@ -286,13 +295,13 @@ class QuestionAgent(BaseAgent):
                 }}
             }}
             """
-            
+
             response = await self.llm.ainvoke(prompt)
             content = response.content if hasattr(response, 'content') else str(response)
-            
+
             # 디버깅을 위한 로그
             logger.debug(f"LLM Response content: {content}")
-            
+
             # JSON 문자열 정제
             content = content.strip()
             if content.startswith("```json"):
@@ -300,7 +309,7 @@ class QuestionAgent(BaseAgent):
             if content.startswith("```"):
                 content = content.split("```")[1]
             content = content.strip()
-            
+
             parsed_content = json.loads(content)
             return {"spec_analysis": parsed_content}
         except Exception as e:

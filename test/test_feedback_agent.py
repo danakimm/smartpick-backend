@@ -3,7 +3,6 @@ import pytest_asyncio
 from app.agents.feedback_agent import FeedbackAgent
 from app.agents.graph import define_workflow
 
-
 @pytest.fixture
 def feedback_agent():
     return FeedbackAgent()
@@ -88,26 +87,76 @@ async def test_feedback_workflow_integration():
         assert len(final_state["feedback_response"]) > 0
 
 @pytest.mark.asyncio
-async def test_websocket_feedback_flow():
-    """WebSocket 피드백 처리 테스트"""
-    from fastapi.testclient import TestClient
-    from app.main import app
+async def test_feedback_workflow_branching():
+    """워크플로우 그래프 분기 테스트"""
+    workflow = define_workflow()
     
-    client = TestClient(app)
+    # 그래프 컴파일
+    compiled_workflow = workflow.compile()
     
-    with client.websocket_connect("/ws/test_client") as websocket:
-        # 초기 메시지 수신
-        response = websocket.receive_json()
-        assert response["type"] == "message"
-        
-        # 피드백 전송
-        websocket.send_json({
-            "type": "feedback",
-            "content": "배터리 수명이 더 긴 제품으로 추천해주세요"
-        })
-        
-        # 피드백 응답 수신
-        response = websocket.receive_json()
-        assert response["type"] == "feedback_response"
-        assert "response" in response["data"]
-        assert "analysis" in response["data"] 
+    # 1. 요구사항 수정(refinement) 케이스 테스트
+    refinement_state = {
+        "question": "게임용 노트북 추천해주세요. 예산은 200만원 이내입니다.",
+        "sub_questions": [],
+        "youtube_agent_state": {},
+        "review_agent_state": {"review_analysis": {"query": "게임용 노트북 리뷰"}},
+        "spec_agent_state": {},
+        "youtube_results": {},
+        "review_results": {
+            "recommendations": "1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15"
+        },
+        "spec_results": {},
+        "middleware_results": {
+            "recommendations": "1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15",
+            "analysis": {"review": {"pros": ["성능이 좋음"], "cons": ["배터리 수명이 짧음"]}}
+        },
+        "final_report": "추천 제품:\n1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15",
+        "feedback": "배터리 수명이 더 긴 제품으로 추천해주세요",
+        "feedback_type": "",
+        "refined_requirements": {},
+        "feedback_response": ""
+    }
+    
+    # 컴파일된 워크플로우 실행
+    refinement_result = await compiled_workflow.ainvoke(refinement_state)
+    print(refinement_result)
+    
+    # 요구사항 수정 분기 검증
+    assert refinement_result["feedback_type"] == "refinement"
+    assert "refined_requirements" in refinement_result
+    # parallel_analysis가 다시 실행되었는지 확인 (review_results가 업데이트되었는지)
+    assert refinement_result["review_results"] != refinement_state["review_results"]
+    
+    # 2. 단순 질문(question) 케이스 테스트
+    question_state = {
+        "question": "게임용 노트북 추천해주세요. 예산은 200만원 이내입니다.",
+        "sub_questions": [],
+        "youtube_agent_state": {},
+        "review_agent_state": {"review_analysis": {"query": "게임용 노트북 리뷰"}},
+        "spec_agent_state": {},
+        "youtube_results": {},
+        "review_results": {
+            "recommendations": "1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15"
+        },
+        "spec_results": {},
+        "middleware_results": {
+            "recommendations": "1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15",
+            "analysis": {"review": {"pros": ["성능이 좋음"], "cons": ["배터리 수명이 짧음"]}}
+        },
+        "final_report": "추천 제품:\n1. 레노버 리전 5 Pro\n2. ASUS ROG Strix G15",
+        "feedback": "레노버 리전 5 Pro의 배터리 용량이 얼마인가요?",
+        "feedback_type": "",
+        "refined_requirements": {},
+        "feedback_response": ""
+    }
+    
+    # 컴파일된 워크플로우 실행
+    question_result = await compiled_workflow.ainvoke(question_state)
+    
+    # 단순 질문 분기 검증
+    assert question_result["feedback_type"] == "question"
+    assert "feedback_response" in question_result
+    assert len(question_result["feedback_response"]) > 0
+    # parallel_analysis가 다시 실행되지 않았는지 확인 (review_results가 그대로인지)
+    assert question_result["review_results"] == question_state["review_results"]
+
