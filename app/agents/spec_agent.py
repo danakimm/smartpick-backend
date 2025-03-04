@@ -40,7 +40,7 @@ class SpecRecommender(BaseAgent):
 
     async def filter_products(self, user_input: dict) -> list:
         """사용자의 요구 사항에 맞는 제품 필터링"""
-        df = pd.read_csv("C:/Users/hu612/Downloads/jh/smartpick-backend/app/agents/product_details.csv")
+        df = pd.read_csv("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/product_details.csv")
         
         context = []
         for _, row in df.iterrows():
@@ -61,21 +61,17 @@ class SpecRecommender(BaseAgent):
 
             context.append({"제품명": product_name, "가격": product_price, "핵심 사항": core_specs})
         
-        return context[:15]  # 최대 15개 제품만 전달
+        return context
     
     async def summarize_features(self, context, user_input):
         """제품 추천을 요약하는 함수."""
-        
+
         try:
             # 최대 3개 제품 추천
             recommended_products = [
                 {
                     "제품명": item["제품명"],
                     "가격": item["가격"],
-                    "추천 이유": {
-                        "pros": ["장점 1", "장점 2", "장점 3"],
-                        "cons": ["단점 1", "단점 2", "단점 3"]
-                    },
                     "핵심 사항": [
                         {
                             "항목": spec["항목"],
@@ -87,19 +83,35 @@ class SpecRecommender(BaseAgent):
                 for item in context[:3]  # 최대 3개 제품 사용
             ]
 
+            # LLM 호출
             response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
-                {"role": "system", "content": "당신은 제품 추천 AI입니다. 문서에서 '항목'과 '사양'을 가져오되, 사양을 보기 좋게 요약하고, 이를 기반으로 설명을 생성하여 JSON으로 반환하세요."},
-                {"role": "user", "content": json.dumps({"추천 제품": recommended_products}, ensure_ascii=False)}
+                {
+                    "role": "system",
+                    "content": """
+                    당신은 제품 추천 AI입니다. 사용자의 요구 사항과 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
+                    '항목'과 '사양'을 기반으로 제품의 특징을 정리하고, 사용자의 요청과 어떻게 부합하는지를 설명하세요.
+                    """
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "사용자 입력": user_input,
+                        "추천 제품": recommended_products
+                    }, ensure_ascii=False)
+                }
             ])
-            
+
             response_text = response.content.strip()
             if response_text.startswith("```json"):
                 response_text = response_text[7:-3].strip()  # 코드 블록 제거
             print("LLM 응답:", response_text)
+
             return json.loads(response_text)
+
         except json.JSONDecodeError as e:
             logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
             return None
+
     
     def extract_price(self, features_text):
         """제품의 출시가를 추출하는 함수."""
