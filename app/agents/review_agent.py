@@ -203,47 +203,10 @@ class ProductRecommender(BaseAgent):
         4. 사용자의 구체적인 요구사항(사용 환경, 사용 시간 등)에 맞춰 추천해주세요
         5. 추천할 때는 반드시 관련된 실제 리뷰를 인용하고, 해당 리뷰의 출처 플랫폼을 명시해주세요
         6. 제시된 형식을 정확히 따라주세요
-        7. 응답은 반드시 JSON 형식으로 제공해야 합니다"""
+        7. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
 
-        human_template = """다음 JSON 형식으로 정확히 추천해주세요:
-        ```json
-        {
-          "recommendations": [
-            {
-              "rank": 1,
-              "product_name": "최우선 추천 태블릿 이름",
-              "reasons": [
-                "추천 이유 1 (실제 리뷰 인용 포함)",
-                "추천 이유 2 (실제 리뷰 인용 포함)"
-              ],
-              "suitability": [
-                "사용자 요구사항과의 적합성 1",
-                "사용자 요구사항과의 적합성 2"
-              ],
-              "review_sources": ["플랫폼1", "플랫폼2"]
-            },
-            {
-              "rank": 2,
-              "product_name": "차선책 추천 태블릿 이름",
-              "reasons": [
-                "추천 이유 1 (실제 리뷰 인용 포함)",
-                "추천 이유 2 (실제 리뷰 인용 포함)"
-              ],
-              "suitability": [
-                "사용자 요구사항과의 적합성 1",
-                "사용자 요구사항과의 적합성 2"
-              ],
-              "differences": [
-                "첫 번째 추천 제품과의 차이점 1",
-                "첫 번째 추천 제품과의 차이점 2"
-              ],
-              "review_sources": ["플랫폼1", "플랫폼2"]
-            }
-          ]
-        }
-        ```
-        
-        반드시 유효한 JSON 형식으로 응답해야 합니다. 추가 설명이나 마크다운 포맷은 사용하지 마세요."""
+        human_template = """다음 형식으로 정확히 추천해주세요:
+{"recommendations": [{"rank": 1,"product_name": "최우선 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources": ["플랫폼1","플랫폼2"]},{"rank": 2,"product_name": "차선책 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"differences": ["첫 번째 추천 제품과의 차이점 1","첫 번째 추천 제품과의 차이점 2"],"review_sources": ["플랫폼1","플랫폼2"]}]}"""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_template),
@@ -270,14 +233,17 @@ class ProductRecommender(BaseAgent):
         
         # JSON 파싱 시도
         try:
-            recommendations_json = json.loads(result.content)
+            # 앞뒤 공백 제거 및 불필요한 이스케이프 문자 제거
+            cleaned_content = result.content.strip().replace('\n', '').replace('\\', '')
+            recommendations_json = json.loads(cleaned_content)
             return recommendations_json
-        except json.JSONDecodeError:
-            # JSON 파싱 실패 시 원본 텍스트 반환
-            logger.warning("Failed to parse recommendation as JSON, returning raw text")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {str(e)}")
+            logger.debug(f"Raw content: {result.content}")
             return {
-                "recommendations": result.content,
-                "format_error": "Failed to parse as JSON"
+                "recommendations": [],
+                "error": "추천 생성 중 오류가 발생했습니다",
+                "details": str(e)
             }
 
     def _analyze_review_sentiment(self, review_text: str) -> Dict[str, Any]:

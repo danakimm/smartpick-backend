@@ -22,7 +22,7 @@ class SpecRecommender(BaseAgent):
         logger.debug(f"SpecRecommend initialized with filepath: {self.product_csv}")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"Running ProductRecommender with state: {state}")
+        logger.debug(f"Running SpecRecommender with state: {state}")
         return await self.generate_recommendations(state)
 
     async def generate_recommendations(self, user_input: Dict[str, Any]) -> dict:
