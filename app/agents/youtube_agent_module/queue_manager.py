@@ -14,6 +14,7 @@ def get_queue():
     return _global_queue
 
 def add_log(message):
+    print(f"로그 추가: {message}")
     get_queue().put(message)
     
     

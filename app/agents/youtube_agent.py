@@ -3,7 +3,7 @@ from typing import Dict, Any
 import asyncio
 from .base import BaseAgent
 from .youtube_agent_module.queue_manager import add_log, LogConsumer
-
+from .youtube_agent_module.cache import YouTubeCacheSystem
 from .youtube_agent_module.search import print_with_output, Keyword_filter
 globalist=[]
 
@@ -21,9 +21,10 @@ class YouTubeAgent(BaseAgent):
         self.flag= False    
         self.log_manager = LogConsumer(max_logs=200)
         self.log_manager.run()
+        self.CacheSystem = YouTubeCacheSystem()
 
-        
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        
         # 입력 처리...
         self.input = state
         if "query" not in self.input.keys():
@@ -33,15 +34,24 @@ class YouTubeAgent(BaseAgent):
         
         self.query = self.input["query"]
         try:
-            log_wrapper(f"<<::STATE::inference_thread_started>>")
-            # 서브스레드에서 실행하고 결과를 직접 받음
-            result = await asyncio.to_thread(self.run_inference)
-            
-            log_wrapper(f"<<::STATE::inference_thread_completed>>")
-            return result
+            result=self.CacheSystem.find_matching_queries(self.query)
+            if result:
+                matched_data, matched_query_id = result
+                print(f'Cache : {matched_data}')
+                return matched_data
+            else:
+                log_wrapper(f"<<::STATE::inference_thread_started>>")
+                # 서브스레드에서 실행하고 결과를 직접 받음
+                result = await asyncio.to_thread(self.run_inference)
+                
+                log_wrapper(f"<<::STATE::inference_thread_completed>>")
+
+                print(f'LLM : {result}')
+                return result
             
         except Exception as e:
             log_wrapper(f"<<::STATE::error>>")
+            
             return {"fail error": str(e)}
 
     def run_inference(self):
@@ -52,7 +62,7 @@ class YouTubeAgent(BaseAgent):
             # 실제 추론 실행
             result = self.extract_from_query()
             # 최종 출력 구성
-
+            self.CacheSystem.add_query(self.query, result)
             # 플래그 해제
             self.flag = False
             
