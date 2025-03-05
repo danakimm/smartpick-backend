@@ -6,7 +6,7 @@ import numpy as np
 from collections import defaultdict
 import hashlib
 from konlpy.tag import Okt
-
+from app.agents.report_agent_module.bsae_reporter import CacheManager
 class KeywordExtractor:
     """
     텍스트에서 키워드를 추출하고 분류하는 클래스
@@ -293,8 +293,14 @@ class IndexStorage:
         
         self.file.flush()
         return True
+    def open_if_closed(self, mode='a'):
+        """파일이 닫혔다면 다시 여는 메서드"""
+        # self.file이 존재하지 않거나, 닫힌 경우 재오픈
+        if not hasattr(self, 'file') or self.file is None or self.file.id.valid!=1:
+            self._open_file(mode)
     
     def add_keyword_to_index(self, keyword, query_id):
+        self.open_if_closed()
         """
         역인덱스에 키워드-쿼리 연결 추가
         
@@ -334,6 +340,7 @@ class IndexStorage:
         return True
     
     def get_queries_by_keyword(self, keyword):
+        self.open_if_closed()
         """
         키워드로 연결된 쿼리 ID 목록 가져오기
         
@@ -721,14 +728,65 @@ class CacheKeywors:
         return tier
     
 
+class YouTubeCacheSystem:
+    def __init__(self,data_path=".quary_to_data.h5",qary_path=".keyword_to_quary.h5"):
+        self.cache = CacheManager(data_path)
+        self.cache_manager = KeywordQueryManager(qary_path)
+    def add_query(self,query_text,data,query_id=None):
+        self.cache_manager.add_query(query_text,query_id)
+        inpitdict={query_text.replace(" ",""):data}
+        self.cache.add_hash(inpitdict)
+    def find_matching_queries(self,text,min_score=0.0,max_results=10):
+        matches= self.cache_manager.find_matching_queries(text,min_score,max_results)
+        if matches:
+            find_dict={matches[0]['query_text'].replace(" ",""):""}
+            out=self.cache.get_value(find_dict)
+            return out, matches[0]['query_text']
+        else:
+            return False
+    def get_query_info(self,query_id):
+        return self.cache_manager.get_query_info(query_id)
+    def print_keyword_info(self):
+        return self.cache.print_keyword_info()
+    def math_category(self,text):
+        return self.cache.match_category(text)
+    def match_tier(self,keywords):
+        return self.cache.match_tier(keywords)
+    def close(self):
+        self.cache_manager.close()
+        self.cache.close()
+    def __enter__(self):
+        return self
+    def __exit__(self,exc_type,exc_val,exc_tb):
+        self.close()
 
+    """
+    # 인덱스 매니저 인스턴스 생성
+manager = KeywordIndexManager('query_index.h5')
 
+# 쿼리 추가 (자동 ID 생성)
+query_id = manager.add_query('디지털 드로잉용 아이패드 태블릿 추천')
 
+# 또는 ID를 직접 지정
+query_id = manager.add_query('노트북 배터리 오래가는 모델 추천', query_id='notebook_battery')
 
+# 파일 닫기 
+manager.close()
+    등록 예시
+    """
+    """
+    # 키워드 검색으로 유사 쿼리 찾기
+user_query = "아이패드 그림 그리기용 추천해주세요"
+matches = manager.find_matching_queries(user_query)
 
-
-
-
+if matches:
+    best_match = matches[0]
+    original_query_text = best_match['query_text']
+    query_id = best_match['query_id']
+    
+    print(f"원본 쿼리: {original_query_text}")
+    print(f"쿼리 ID: {query_id}")
+    """
 
 import os
 import random
@@ -944,7 +1002,75 @@ def run_test():
 
 
     
-    
 # 테스트 출력
 if __name__ == "__main__":
     run_test()
+
+        # 테스트용 파일 경로 (기존 파일이 있다면 삭제)
+    CACHE_FILE = "youtube_cache_test.h5"
+    QUERY_INDEX_FILE = "youtube_query_index_test.h5"
+    for f in [CACHE_FILE, QUERY_INDEX_FILE]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    # 예시 데이터셋: 각 쿼리와 연결된 YouTube 영상 데이터
+    youtube_data = [
+        {
+            "query": "디지털 드로잉용 아이패드 태블릿 추천",
+            "data": {
+                "video_id": "video123",
+                "title": "디지털 드로잉용 아이패드 태블릿 추천 영상",
+                "description": "이 영상에서는 디지털 드로잉에 최적화된 아이패드 태블릿을 소개합니다."
+            }
+        },
+        {
+            "query": "노트북 배터리 오래가는 모델 추천",
+            "data": {
+                "video_id": "video456",
+                "title": "배터리 수명이 긴 노트북 리뷰",
+                "description": "최신 노트북 중 배터리 성능이 뛰어난 모델들을 비교합니다."
+            }
+        },
+        {
+            "query": "갤럭시탭 S7 vs 아이패드 프로 비교",
+            "data": {
+                "video_id": "video789",
+                "title": "갤럭시탭 S7 vs 아이패드 프로, 어느 태블릿이 좋을까?",
+                "description": "두 태블릿의 성능과 사용성을 상세 비교한 리뷰 영상입니다."
+            }
+        }
+    ]
+
+    # YouTubeCacheSystem 인스턴스 생성 (파일 경로 지정)
+    youtube_cache = YouTubeCacheSystem(data_path=CACHE_FILE, qary_path=QUERY_INDEX_FILE)
+
+    # 데이터셋의 각 쿼리와 관련 데이터를 시스템에 추가
+    for item in youtube_data:
+        query_text = item["query"]
+        data = item["data"]
+        youtube_cache.add_query(query_text, data)
+        print(f"쿼리 추가: {query_text}")
+
+    print("\n--- 추가된 쿼리들 ---")
+    # 등록된 쿼리 ID들을 확인 (내부 인덱스에 저장된 query_id 리스트)
+    with youtube_cache.cache_manager.index_storage as storage:
+        all_queries = storage.get_all_queries()
+        print("등록된 쿼리 ID:", all_queries)
+
+    # 검색 테스트: 비슷한 쿼리로 매칭 확인
+    search_query = "아이패드 드로잉 태블릿 추천"
+    result = youtube_cache.find_matching_queries(search_query, min_score=0.1, max_results=10)
+
+    print("\n--- 검색 결과 ---")
+    if result:
+        matched_data, matched_query_id = result
+        print("매칭된 데이터:")
+        pprint(matched_data)
+        print("매칭된 쿼리 ID:", matched_query_id)
+    else:
+        print("매칭되는 쿼리가 없습니다.")
+
+    # 시스템 닫기
+    youtube_cache.close()
+    
+    

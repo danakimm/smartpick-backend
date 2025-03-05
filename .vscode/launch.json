@@ -16,6 +16,20 @@
                 "PYTHONUNBUFFERED": "1"
             }
         
+        },
+        {
+            "name": "test_cache",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "test.cache_test",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONUNBUFFERED": "1"
+            }
+        
         }
     ]
+    
 }
