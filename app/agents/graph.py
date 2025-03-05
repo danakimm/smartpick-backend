@@ -19,14 +19,19 @@ from .review_agent import ProductRecommender
 from .spec_agent import SpecRecommender
 # from .spec_agent import SpecAgent
 # from .youtube_agent import YouTubeAgent
-# from .middleware_agent import MiddlewareAgent
+from .middleware_agent import MiddlewareAgent
 # from .report_agent import ReportAgent
 
 question_agent = QuestionAgent()
 review_agent = ProductRecommender()
 spec_agent = SpecRecommender()
 # youtube_agent = YouTubeAgent()
-# middleware_agent = MiddlewareAgent()
+# 수정
+middleware_agent = MiddlewareAgent(
+    review_agent=review_agent,
+    spec_agent=spec_agent, 
+    # youtube_agent=youtube_agent
+                                   )
 # report_agent = ReportAgent()
 
 logger = logging.getLogger("smartpick.agents.graph")
@@ -64,28 +69,7 @@ def define_workflow():
         return results
 
     async def middleware_processing(state: AgentState) -> Dict:
-        logger.debug(f"Middleware input state: {state}")  # 입력 상태 로깅
-        
-        try:
-            middleware_results = {
-                "recommendations": state["review_results"].get("recommendations", ""),
-                "analysis": {
-                    "youtube": state.get("youtube_results", {}),
-                    "review": state.get("review_results", {}),
-                    "spec": state.get("spec_results", {})
-                }
-            }
-            logger.debug(f"Middleware results: {middleware_results}")  # 결과 로깅
-            return {"middleware_results": middleware_results}
-            
-        except Exception as e:
-            logger.error(f"Error in middleware processing: {e}")
-            return {
-                "middleware_results": {
-                    "recommendations": "미들웨어 처리 중 오류가 발생했습니다.",
-                    "analysis": {}
-                }
-            }
+        return await middleware_agent.run(state)
 
     async def report_generation(state: AgentState) -> Dict:
         logger.debug(f"Report input state: {state}")  # 입력 상태 로깅
