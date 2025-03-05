@@ -13,6 +13,9 @@ logger = logging.getLogger("smartpick.websocket")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     active_connections[client_id] = websocket
+    
+    # WebSocket timeout 설정
+    websocket.client.timeout = 60.0  # 60초 timeout 설정
 
     try:
         question_agent = QuestionAgent()
@@ -143,12 +146,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 "data": final_state
                             })
                         except Exception as e:
-                            logger.error(f"Error running workflow: {e}")
+                            logger.error(f"Error running workflow: {str(e)}")
+                            logger.debug(f"Error details: {type(e).__name__}")  # 오류 타입 추가
                             await websocket.send_json({
                                 "type": "error",
                                 "client_id": client_id,
                                 "data": {
-                                    "message": f"워크플로우 실행 중 오류가 발생했습니다: {str(e)}"
+                                    "message": "워크플로우 실행 중 오류가 발생했습니다",
+                                    "error": str(e)
                                 }
                             })
                 except Exception as e:
