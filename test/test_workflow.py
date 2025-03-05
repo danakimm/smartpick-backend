@@ -3,6 +3,8 @@ from app.agents.graph import define_workflow, clean_agent
 from app.agents.question_agent import QuestionAgent
 import logging
 import os
+import pytest
+from app.utils.logger import logger
 
 # 로깅 설정
 logging.basicConfig(level=logging.DEBUG)

@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import re
 import emoji
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 import asyncio
+from app.utils.logger import logger
 
 load_dotenv()
 
@@ -269,8 +270,6 @@ class ReviewDBManager:
                 
                 return reviews
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error searching for reviews: {str(e)}")
             return []
 

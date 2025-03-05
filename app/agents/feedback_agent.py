@@ -1,13 +1,11 @@
 import os
 from dotenv import load_dotenv
-from typing import Literal, Dict, Any
+from typing import Literal, Dict, Any, List
 from .base import BaseAgent
 import json
-import logging
+from app.utils.logger import logger
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
-
-logger = logging.getLogger("smartpick.agents.feedback_agent")
 
 load_dotenv()
 
