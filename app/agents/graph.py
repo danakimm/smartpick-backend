@@ -67,16 +67,31 @@ def define_workflow():
         logger.debug(f"Middleware input state: {state}")  # 입력 상태 로깅
         
         try:
+            # 위에서 추천 제품 run (구현 필요)
+            recommended_product = state["review_results"].get("recommendations", "")
+
+            # 추천된 제품의 상세 정보 가져오기 (review_agent 말고 spec_agent도 필요함)
+            review_report = await review_agent.get_product_details(recommended_product)
+            purchase_info = await review_agent.get_purchase_info(recommended_product)
+            
+            spec_details = await spec_agent.get_product_details(recommended_product)
+
             middleware_results = {
-                "recommendations": state["review_results"].get("recommendations", ""),
-                "analysis": {
-                    "youtube": state.get("youtube_results", {}),
-                    "review": state.get("review_results", {}),
-                    "spec": state.get("spec_results", {})
+                "query": state["question"],
+                "product_name": recommended_product,
+                "product_details": {
+                    "review": review_report,
+                    "spec": spec_details
+                },
+                "context":{
+                    "youtube": state["youtube_results"],
+                    "review": state["review_results"],
+                    "spec": state["spec_results"]
                 }
             }
+            
             logger.debug(f"Middleware results: {middleware_results}")  # 결과 로깅
-            return {"middleware_results": middleware_results}
+            return {"middleware": middleware_results}
             
         except Exception as e:
             logger.error(f"Error in middleware processing: {e}")
