@@ -46,32 +46,44 @@ async def analyze_and_save_reviews():
         raise
 
 async def check_analysis_results():
-    """저장된 분석 결과를 확인하는 함수"""
+    """모든 리뷰의 감성분석 및 품질 평가 상태를 확인하는 함수"""
     
-    db_path = os.getenv("REVIEW_DB_PATH", "tablet_reviews_db")
     db_path = r'C:\Users\USER\Desktop\inner\SmartPick\git\smartpick-backend\app\agents\tablet_reviews_db'
     db_manager = ReviewDBManager(db_path)
     
-    # 전체 분석 결과 로드
+    print("\n=== 리뷰 분석 상태 확인 ===")
+    
+    # 전체 제품 목록 가져오기
     products = db_manager.get_all_products()
-
-    print("\n=== 저장된 분석 결과 ===")
-    for product_name, analysis in analyses.items():
-        print(f"\n제품명: {product_name}")
-        print(f"마지막 업데이트: {analysis.get('last_updated', '정보 없음')}")
-        print(f"전체 리뷰 수: {analysis.get('total_reviews', 0)}")
-        print(f"긍정 리뷰 비율: {analysis.get('positive_ratio', 0)}%")
-        print(f"부정 리뷰 비율: {analysis.get('negative_ratio', 0)}%")
+    
+    total_reviews = 0
+    reviews_with_sentiment = 0
+    reviews_with_quality = 0
+    
+    for product in products:
+        print(f"\n제품명: {product}")
         
-        print("\n[긍정적 요약]")
-        for summary in analysis.get('positive_summaries', []):
-            print(f"- {summary}")
+        # 제품의 모든 리뷰 가져오기
+        reviews = db_manager.get_reviews_by_product(product)
+        product_total = len(reviews)
+        product_sentiment = sum(1 for r in reviews if r.get('sentiment') is not None)
+        product_quality = sum(1 for r in reviews if r.get('quality') is not None)
+        
+        print(f"전체 리뷰 수: {product_total}")
+        print(f"감성점수 있는 리뷰: {product_sentiment} ({product_sentiment/product_total*100:.1f}%)")
+        print(f"품질점수 있는 리뷰: {product_quality} ({product_quality/product_total*100:.1f}%)")
+        
+        if product_sentiment < product_total or product_quality < product_total:
+            print("⚠️ 누락된 분석 결과가 있습니다!")
             
-        print("\n[부정적 요약]")
-        for summary in analysis.get('negative_summaries', []):
-            print(f"- {summary}")
-        
-        print("\n" + "="*50)
+        total_reviews += product_total
+        reviews_with_sentiment += product_sentiment
+        reviews_with_quality += product_quality
+    
+    print("\n=== 전체 통계 ===")
+    print(f"총 리뷰 수: {total_reviews}")
+    print(f"감성분석 완료: {reviews_with_sentiment} ({reviews_with_sentiment/total_reviews*100:.1f}%)")
+    print(f"품질평가 완료: {reviews_with_quality} ({reviews_with_quality/total_reviews*100:.1f}%)")
 
 if __name__ == "__main__":
     import argparse
