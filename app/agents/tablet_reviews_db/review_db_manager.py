@@ -276,7 +276,7 @@ class ReviewDBManager:
 
     async def _analyze_reviews_batch(self, reviews: List[Dict]) -> List[Dict]:
         """리뷰들을 배치로 분석하여 감성과 품질을 분류"""
-        batch_size = 20
+        batch_size = 10
         analyzed_reviews = []
         
         for i in range(0, len(reviews), batch_size):
@@ -287,7 +287,7 @@ class ReviewDBManager:
                 for j, review in enumerate(batch)
             ])
             
-            prompt = f"""다음 리뷰들의 감성(긍정/부정)과 품질을 분석해주세요.
+            prompt = f"""다음 {len(batch)}개의 리뷰들의 감성(긍정/부정)과 품질을 분석해주세요.
             
             품질 기준:
             - high: 구체적인 사용 경험과 장단점이 잘 설명된 리뷰
@@ -296,25 +296,43 @@ class ReviewDBManager:
             
             각 리뷰에 대해 다음 형식으로 답해주세요:
             리뷰 1: [감성] positive/negative, [품질] high/medium/low
+            리뷰 2: [감성] positive/negative, [품질] high/medium/low
+            ...
+            리뷰 {len(batch)}: [감성] positive/negative, [품질] high/medium/low
             
             {batch_texts}
             
-            분석:
-            리뷰 1: 
-            리뷰 2: 
-            ...
-            """
+            분석:"""
             
-            response = await self.llm.ainvoke(prompt)
-            analysis_results = self._parse_analysis_response(response.content)
-            
-            # 분석 결과를 원본 리뷰와 합치기
-            for review, analysis in zip(batch, analysis_results):
-                review_copy = review.copy()
-                review_copy["sentiment"] = analysis["sentiment"]
-                review_copy["quality"] = analysis["quality"]
-                print(review_copy)
-                analyzed_reviews.append(review_copy)
+            try:
+                response = await self.llm.ainvoke(prompt)
+                analysis_results = self._parse_analysis_response(response.content)
+                
+                # 분석 결과 수와 배치 크기가 다른 경우 처리
+                if len(analysis_results) != len(batch):
+                    print(f"Warning: 분석 결과 수({len(analysis_results)})가 배치 크기({len(batch)})와 다릅니다.")
+                    # 부족한 결과는 기본값으로 채움
+                    while len(analysis_results) < len(batch):
+                        analysis_results.append({
+                            "sentiment": "positive" if batch[len(analysis_results)]['rating'] >= 4.0 else "negative",
+                            "quality": "medium"
+                        })
+                
+                # 분석 결과를 원본 리뷰와 합치기
+                for review, analysis in zip(batch, analysis_results):
+                    review_copy = review.copy()
+                    review_copy["sentiment"] = analysis["sentiment"]
+                    review_copy["quality"] = analysis["quality"]
+                    analyzed_reviews.append(review_copy)
+                    
+            except Exception as e:
+                print(f"Error during batch analysis: {str(e)}")
+                # 오류 발생 시 기본값으로 처리
+                for review in batch:
+                    review_copy = review.copy()
+                    review_copy["sentiment"] = "positive" if review['rating'] >= 4.0 else "negative"
+                    review_copy["quality"] = "medium"
+                    analyzed_reviews.append(review_copy)
                 
         return analyzed_reviews
             
@@ -335,144 +353,6 @@ class ReviewDBManager:
                 except:
                     continue
         return results
-
-    async def get_product_analysis_stats(self, product_name: str) -> Dict:
-        """제품의 리뷰 통계를 계산"""
-        reviews = self.get_reviews_by_product(product_name)
-        if not reviews:
-            return {
-                "product_name": product_name,
-                "error": "리뷰를 찾을 수 없습니다."
-            }
-        
-        # 긍정/부정 리뷰 수 계산
-        positive_reviews = [r for r in reviews if r.get('sentiment') == 'positive']
-        negative_reviews = [r for r in reviews if r.get('sentiment') == 'negative']
-        
-        total_reviews = len(reviews)
-        positive_ratio = (len(positive_reviews) / total_reviews) * 100
-        negative_ratio = (len(negative_reviews) / total_reviews) * 100
-        
-        # 대표 리뷰 선정
-        selected_positive = self._select_representative_reviews(positive_reviews, count=10)
-        selected_negative = self._select_representative_reviews(negative_reviews, count=10)
-        
-        return {
-            "product_name": product_name,
-            "total_reviews": total_reviews,
-            "positive_percentage": round(positive_ratio, 1),
-            "negative_percentage": round(negative_ratio, 1),
-            "positive_reviews": [
-                {
-                    "text": review["text"],
-                    "platform": review["platform"],
-                    "quality": review["quality"]
-                }
-                for review in selected_positive
-            ],
-            "negative_reviews": [
-                {
-                    "text": review["text"],
-                    "platform": review["platform"],
-                    "quality": review["quality"]
-                }
-                for review in selected_negative
-            ]
-        }
-
-    def _select_representative_reviews(self, reviews: List[Dict], count: int = 2) -> List[Dict]:
-        """대표 리뷰 선정"""
-        # 품질 점수로 변환
-        quality_scores = {
-            'high': 3,
-            'medium': 2,
-            'low': 1
-        }
-        
-        scored_reviews = []
-        for review in reviews:
-            score = quality_scores.get(review['quality'], 0)  # LLM이 분석한 품질 점수
-            
-            # 배송 관련 내용 감점은 유지
-            if '배송' in review['text']:
-                score -= 1
-                
-            # 플랫폼 다양성 가중치도 유지
-            platform_counts = {}
-            for r in scored_reviews:
-                platform_counts[r['platform']] = platform_counts.get(r['platform'], 0) + 1
-            
-            if platform_counts.get(review['platform'], 0) == 0:
-                score += 1
-            
-            scored_reviews.append({
-                **review,
-                'selection_score': score
-            })
-        
-        # 점수로 정렬하고 상위 n개 선택
-        scored_reviews.sort(key=lambda x: x['selection_score'], reverse=True)
-        return scored_reviews[:count]
-
-    async def _generate_review_analysis(self, reviews: List[Dict], sentiment_type: str) -> Dict:
-        """리뷰들의 핵심 요약 포인트와 대표 리뷰들을 추출"""
-        
-        review_texts = "\n\n".join([
-            f"리뷰 {i+1}:\n{review['text']}"
-            for i, review in enumerate(reviews[:10])  # 상위 10개 리뷰만 사용
-        ])
-        
-        # 1. 핵심 요약 포인트 추출
-        summary_prompt = f"""다음은 제품에 대한 {sentiment_type} 리뷰들입니다.
-        가장 자주 언급되는 핵심 포인트 4개를 추출해주세요.
-        각 포인트는 실제 리뷰에서 사용된 표현을 최대한 살려서 한 줄로 작성해주세요.
-        
-        {review_texts}
-        
-        형식:
-        - 포인트1
-        - 포인트2
-        - 포인트3
-        - 포인트4
-        """
-        
-        # 2. 대표 리뷰 선정
-        review_prompt = f"""위 리뷰들 중에서 제품의 {sentiment_type}적인 특징을 가장 잘 보여주는
-        실제 리뷰 4개를 선택해주세요. 너무 길지 않고 구체적인 리뷰를 선택해주세요.
-        
-        선택한 리뷰의 번호만 알려주세요.
-        예시: 리뷰 1, 리뷰 3, 리뷰 5, 리뷰 8
-        """
-        
-        # 두 작업 병렬 실행
-        summary_response, review_selection = await asyncio.gather(
-            self.llm.ainvoke(summary_prompt),
-            self.llm.ainvoke(review_prompt)
-        )
-        
-        # 선택된 리뷰 번호 파싱
-        selected_indices = [
-            int(num.strip()) - 1 
-            for num in review_selection.content.replace('리뷰', '').split(',')
-        ]
-        
-        # 포인트 파싱
-        key_points = [
-            point.strip('- ').strip()
-            for point in summary_response.content.split('\n')
-            if point.strip().startswith('-')
-        ]
-        
-        return {
-            "key_points": key_points,
-            "selected_reviews": [
-                {
-                    "text": reviews[idx]['text'],
-                    "platform": reviews[idx]['platform']
-                }
-                for idx in selected_indices
-            ]
-        }
                     
     async def update_review_analysis(self, product_name: str) -> None:
         """리뷰 분석 결과를 DB에 업데이트"""
@@ -495,32 +375,39 @@ class ReviewDBManager:
                 'platform': results['metadatas'][i].get('platform', '플랫폼 정보 없음')
             })
         
-        # 리뷰 분석
+        # 리뷰 분석 (배치로 처리)
         analyzed_reviews = await self._analyze_reviews_batch(reviews)
         
-        # DB 업데이트
-        # 1. 기존 리뷰 삭제
-        self.vector_store.delete(
-            ids=results['ids']
-        )
+        # DB 업데이트도 배치로 처리
+        batch_size = 100  # DB 업데이트 배치 크기
         
-        # 2. 분석된 리뷰 다시 추가
-        texts = [r['text'] for r in analyzed_reviews]
-        metadatas = [{
-            'product': r['product'],
-            'price': float(r['price']),
-            'rating': float(r['rating']),
-            'platform': r['platform'],
-            'sentiment': r['sentiment'],
-            'quality': r['quality']
-        } for r in analyzed_reviews]
-        
-        # 3. 벡터 DB에 다시 추가
-        self.vector_store.add_texts(
-            texts=texts,
-            metadatas=metadatas,
-            ids=results['ids']  # 기존 ID 재사용
-        )
+        for i in range(0, len(analyzed_reviews), batch_size):
+            batch = analyzed_reviews[i:i+batch_size]
+            batch_ids = [r['id'] for r in batch]
+            
+            # 1. 현재 배치의 기존 리뷰 삭제
+            self.vector_store.delete(ids=batch_ids)
+            
+            # 2. 분석된 리뷰 배치 추가
+            texts = [r['text'] for r in batch]
+            metadatas = [{
+                'product': r['product'],
+                'price': float(r['price']),
+                'rating': float(r['rating']),
+                'platform': r['platform'],
+                'sentiment': r['sentiment'],
+                'quality': r['quality']
+            } for r in batch]
+            
+            # 3. 벡터 DB에 배치 추가
+            self.vector_store.add_texts(
+                texts=texts,
+                metadatas=metadatas,
+                ids=batch_ids  # 기존 ID 재사용
+            )
+            
+            progress = min((i + len(batch)) / len(analyzed_reviews) * 100, 100)
+            print(f"DB 업데이트 진행률: {progress:.1f}% ({i + len(batch)}/{len(analyzed_reviews)})")
 
 if __name__ == "__main__":
     db_manager = ReviewDBManager('tablet_reviews_db')
@@ -572,3 +459,4 @@ if __name__ == "__main__":
 
     for product in products:
         print(len(db_manager.get_reviews_by_product(product, limit=10000)))
+
