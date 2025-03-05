@@ -36,3 +36,7 @@ sqlalchemy
 langgraph==0.2.71
 emoji==2.14.1
 langchain_chroma==0.2.2
+
+
+#for cache
+konlpy
