@@ -2,11 +2,11 @@ from fastapi import APIRouter, WebSocket
 from typing import Dict
 from app.agents.graph import define_workflow, AgentState
 from app.agents.question_agent import QuestionAgent
-import logging
+import json
+from app.utils.logger import logger
 
 router = APIRouter()
 active_connections: Dict[str, WebSocket] = {}  # client_id로 연결 관리
-logger = logging.getLogger("smartpick.websocket")
 
 
 @router.websocket("/ws/{client_id}")

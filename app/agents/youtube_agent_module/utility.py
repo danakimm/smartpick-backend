@@ -20,7 +20,7 @@ class APIcontroller:
     def __init__(self):
         load_dotenv()
         self.UPSTAGE_API_KEY = os.environ.get("UPSTAGE_API_KEY")
-        self.OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY_YTB")
+        self.OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
         self.model=None
         if not self.UPSTAGE_API_KEY:
             self.UPSTAGE_API_KEY = None

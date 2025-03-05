@@ -6,10 +6,8 @@ import json
 from app.agents.tablet_reviews_db.review_db_manager import ReviewDBManager
 from dotenv import load_dotenv
 from .base import BaseAgent
-import logging
+from app.utils.logger import logger
 import asyncio
-
-logger = logging.getLogger("smartpick.agents.review_agent")
 
 load_dotenv()
 

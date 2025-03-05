@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from app.utils.logger import logger
 
 # 에이전트 모듈 임포트 (실제 구현 필요)
 from spec_agent import SpecRecommender
