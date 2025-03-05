@@ -2,6 +2,7 @@ import asyncio
 import os
 from datetime import datetime
 from review_db_manager import ReviewDBManager
+import pandas as pd
 
 async def analyze_and_save_reviews():
     """모든 제품의 리뷰를 분석하고 결과를 저장하는 스크립트"""
@@ -65,6 +66,7 @@ async def check_analysis_results():
         
         # 제품의 모든 리뷰 가져오기
         reviews = db_manager.get_reviews_by_product(product)
+        print(reviews[:5])
         product_total = len(reviews)
         product_sentiment = sum(1 for r in reviews if r.get('sentiment') is not None)
         product_quality = sum(1 for r in reviews if r.get('quality') is not None)
@@ -85,12 +87,43 @@ async def check_analysis_results():
     print(f"감성분석 완료: {reviews_with_sentiment} ({reviews_with_sentiment/total_reviews*100:.1f}%)")
     print(f"품질평가 완료: {reviews_with_quality} ({reviews_with_quality/total_reviews*100:.1f}%)")
 
+
+async def update_excel_ratings(excel_path: str, platform: str):
+    db_path = r'C:\Users\USER\Desktop\inner\SmartPick\git\smartpick-backend\app\agents\tablet_reviews_db'
+    db_manager = ReviewDBManager(db_path)
+    
+    # 엑셀 파일 읽기
+    df = pd.read_excel(excel_path)
+    
+    # 전체 제품 목록 가져오기
+    products = db_manager.get_all_products()
+    
+    for product in products:
+        # 제품의 모든 리뷰 가져오기
+        reviews = db_manager.get_reviews_by_product(product)
+        # 플랫폼별 리뷰 필터링
+        platform_reviews = [r for r in reviews if r.get('platform') == platform]
+        
+        # rating 평균 계산
+        if platform_reviews:
+            valid_ratings = [r.get('rating', 0) for r in platform_reviews if r.get('rating') is not None]
+            if valid_ratings:
+                avg_rating = round(sum(valid_ratings) / len(valid_ratings), 1)
+                # 해당 제품과 플랫폼의 빈 rating 채우기
+                mask = (df['product_name'] == product) & (df['platform'] == platform) & (df['rating'].isna())
+                df.loc[mask, 'rating'] = avg_rating
+    
+    # 수정된 데이터프레임 저장
+    df.to_excel(excel_path, index=False)
+    # print(f"평균 rating이 반영된 파일이 저장되었습니다: {excel_path.replace('.xlsx', '_updated.xlsx')}")
+
+
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='태블릿 리뷰 분석 도구')
-    parser.add_argument('--mode', choices=['analyze', 'check'], 
-                       default='analyze',
+    parser.add_argument('--mode', choices=['analyze', 'check'],
+                       default='check',
                        help='실행 모드 선택 (analyze: 새로 분석, check: 결과 확인)')
     
     args = parser.parse_args()
@@ -101,3 +134,5 @@ if __name__ == "__main__":
     else:
         print("저장된 분석 결과를 확인합니다...")
         asyncio.run(check_analysis_results())
+
+    # asyncio.run(update_excel_ratings(r'C:\Users\USER\Desktop\inner\SmartPick\git\smartpick-backend\app\agents\spec_documents\purchase_info_updated.xlsx', 'naver'))

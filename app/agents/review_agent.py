@@ -7,6 +7,7 @@ from app.agents.tablet_reviews_db.review_db_manager import ReviewDBManager
 from dotenv import load_dotenv
 from .base import BaseAgent
 import logging
+import asyncio
 
 logger = logging.getLogger("smartpick.agents.review_agent")
 
@@ -318,6 +319,217 @@ class ProductRecommender(BaseAgent):
                 "dissatisfaction_points": []
             }
 
+    async def get_product_details(self, product_name: str) -> Dict[str, Any]:
+        """제품 상세 정보 가져오기"""
+        # 제품 이름에 따른 제품 정보 가져오기
+        product_reviews = self.db_manager.get_reviews_by_product(product_name)
+
+        if not product_reviews:
+            return {"product_name": product_name, "error": "리뷰를 찾을 수 없습니다."}
+
+        # 긍정/부정 리뷰 수 계산
+        positive_reviews = [r for r in product_reviews if r.get('sentiment') == 'positive']
+        negative_reviews = [r for r in product_reviews if r.get('sentiment') == 'negative']
+
+        total_reviews = len(product_reviews)
+        positive_ratio = (len(positive_reviews) / total_reviews) * 100
+        negative_ratio = (len(negative_reviews) / total_reviews) * 100
+
+        # 대표 리뷰 선정
+        selected_positive = self._select_representative_reviews(positive_reviews, count=8)
+        selected_negative = self._select_representative_reviews(negative_reviews, count=8)
+
+        # 긍정/부정 리뷰 분석 병렬 실행
+        positive_analysis, negative_analysis = await asyncio.gather(
+            self._generate_review_analysis(selected_positive, "긍정"),
+            self._generate_review_analysis(selected_negative, "부정")
+        )
+
+        return {
+            "product_name": product_name,
+            "total_reviews": total_reviews,
+            "positive_percentage": round(positive_ratio, 0),
+            "negative_percentage": round(negative_ratio, 0),
+            "positive_reviews": {
+                "key_points": positive_analysis["key_points"],
+                "reviews": positive_analysis["selected_reviews"]
+            },
+            "negative_reviews": {
+                "key_points": negative_analysis["key_points"],
+                "reviews": negative_analysis["selected_reviews"]
+            }
+        }
+
+    def _select_representative_reviews(self, reviews: List[Dict], count: int = 2) -> List[Dict]:
+        """대표 리뷰 선정"""
+        # 품질 점수로 변환
+        quality_scores = {
+            'high': 3,
+            'medium': 2,
+            'low': 1
+        }
+
+        scored_reviews = []
+        for review in reviews:
+            score = quality_scores.get(review['quality'], 0)  # LLM이 분석한 품질 점수
+
+            # 배송 관련 내용 감점
+            if '배송' in review['text']:
+                score -= 1
+
+            # 플랫폼 다양성 가중치도 유지
+            platform_counts = {}
+            for r in scored_reviews:
+                platform_counts[r['platform']] = platform_counts.get(r['platform'], 0) + 1
+
+            if platform_counts.get(review['platform'], 0) == 0:
+                score += 1
+
+            scored_reviews.append({
+                **review,
+                'selection_score': score
+            })
+
+        # 점수로 정렬하고 상위 n개 선택
+        scored_reviews.sort(key=lambda x: x['selection_score'], reverse=True)
+        return scored_reviews[:count]
+
+    async def _generate_review_analysis(self, reviews: List[Dict], sentiment_type: str) -> Dict:
+        """리뷰들의 핵심 요약 포인트와 대표 리뷰들을 추출"""
+
+        # 1. 먼저 각 리뷰를 요약
+        summary_reviews = []
+        for i, review in enumerate(reviews[:10]):
+            summarize_prompt = ChatPromptTemplate.from_messages([
+                ("system", """태블릿 리뷰를 요약하는 전문가입니다.
+                원본 리뷰의 말투와 어조를 정확히 일치시켜 요약해주세요.
+                예시)
+                - 원본: "~합니다/습니다" → 요약: "~합니다/습니다"
+                - 원본: "~했어요/에요" → 요약: "~했어요/에요"
+                - 원본: "~임/함" → 요약: "~임/함"
+                - 원본: "~한다/이다" → 요약: "~한다/이다"
+                말투가 바뀌면 안됩니다."""),
+                ("human", f"""다음 리뷰를 원본과 정확히 같은 말투로 40자 이내로 간단히 요약해주세요:
+                - 제품의 주요 특징과 실제 사용 경험 중심
+                - 배송/포장 관련 내용 제외
+                - 장단점 포함
+                - 구체적인 수치나 비교 정보 유지
+                - 원본 리뷰의 어투 보존
+
+                원본 리뷰: {review['text']}
+                """)
+            ])
+            
+            chat_05 = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.5,  # 어투 유지를 위해 적당한 temperature 설정
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            
+            # summary_result = await (summarize_prompt | chat).ainvoke({})
+            summary_result = (summarize_prompt | chat_05).invoke({})
+            summary_reviews.append({
+                "original": review,
+                "summary": summary_result.content,
+                "index": i + 1
+            })
+
+        # 요약된 리뷰들로 텍스트 구성
+        review_texts = "\n\n".join([
+            f"리뷰 {review['index']}:\n{review['summary']}"
+            for review in summary_reviews
+        ])
+
+        # 2. 핵심 요약 포인트 추출
+        review_type = "장점" if sentiment_type == "긍정" else "단점"
+        summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""태블릿 리뷰 분석 전문가로서, 주요 {review_type}을 짧은 키워드로 추출해주세요.
+            각 키워드는 3-5단어 이내의 간결한 구로 표현하고, 이모지나 아이콘을 사용하지 마세요."""),
+            ("human", f"""다음은 태블릿 전자제품에 대한 {sentiment_type} 리뷰들입니다.
+            가장 자주 언급되는 핵심 포인트 4-5개를 키워드 형태로 추출해주세요.
+            
+            각 키워드는:
+            - 3-5단어 이내의 명사구나 짧은 구문으로 작성
+            - 구체적인 제품 특성에 집중 (예: "배터리 오래감", "USB-C라서 너무 편함")
+            
+            {review_texts}
+            
+            다음과 같은 결과물을 원합니다:
+            장점인 경우:
+            - 디자인 진짜 예뻐요
+            - 영상 볼 때 진짜 최고
+            - 배터리 오래가요
+            - USB-C라서 너무 편함
+            
+            단점인 경우:
+            - 애플펜슬 1세대만 되는 거 실화?
+            - 가격이 너무 비싸졌어요
+            - 주사율이 60Hz라 아쉬움
+            - 애매한 포지션...
+                        
+            위 예시처럼 결과를 생성해주되, 실제 리뷰 내용을 기반으로 키워드를 추출해주세요.
+            원하는 형식:
+            - 키워드1
+            - 키워드2 
+            - 키워드3
+            - 키워드4
+            """)
+        ])
+
+        # 3. 대표 리뷰 선정
+        review_prompt = ChatPromptTemplate.from_messages([
+            ("system", "태블릿 리뷰 분석 전문가로서, 대표적인 리뷰를 선정해주세요."),
+            ("human", f"""위 리뷰들 중에서 제품의 {sentiment_type}적인 특징을 가장 잘 보여주는
+            실제 리뷰 4개를 선택해주세요. 
+             
+            {review_texts}
+
+            선택한 리뷰의 번호만 알려주세요.
+            예시: 리뷰 1, 리뷰 3, 리뷰 5, 리뷰 8
+            """)
+        ])
+
+        # ChatOpenAI 인스턴스 생성
+        chat_0 = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0,
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
+
+        # 두 작업 병렬 실행
+        summary_chain = summary_prompt | chat_05
+        review_chain = review_prompt | chat_0
+        
+        summary_response, review_selection = await asyncio.gather(
+            summary_chain.ainvoke({"text": review_texts}),
+            review_chain.ainvoke({"text": review_texts})
+        )
+
+        # 선택된 리뷰 번호 파싱
+        selected_indices = [
+            int(num.strip()) - 1
+            for num in review_selection.content.replace('리뷰', '').split(',')
+        ]
+
+        # 포인트 파싱
+        key_points = [
+            point.strip('- ').strip()
+            for point in summary_response.content.split('\n')
+            if point.strip().startswith('-')
+        ]
+
+        return {
+            "key_points": key_points,
+            "selected_reviews": [
+                {
+                    "text": summary_reviews[idx]["summary"],  # 요약된 텍스트 사용
+                    "platform": summary_reviews[idx]["original"]["platform"]
+                }
+                for idx in selected_indices
+            ]
+        }
+
+
 # 사용 예시
 if __name__ == "__main__":
 
@@ -355,3 +567,23 @@ if __name__ == "__main__":
     print("\n=== 제품 추천 결과 ===")
     print(result["recommendations"])
     print(time.time()-mt)
+
+    
+    # from app.agents.tablet_reviews_db.review_db_manager import ReviewDBManager
+    # db_path = r'C:\Users\USER\Desktop\inner\SmartPick\git\smartpick-backend\app\agents\tablet_reviews_db'
+    # db_manager = ReviewDBManager(db_path)
+    # product_name = 'Apple iPad Pro 11 3세대'
+    # product_reviews = db_manager.get_reviews_by_product(product_name)
+    # count= 10
+    # reviews=positive_reviews
+    # selected_positive = scored_reviews[:count]
+
+    # reviews=negative_reviews
+    # selected_negative = scored_reviews[:count]
+
+    # sentiment_type = "긍정"
+    # sentiment_type = "부정"
+
+    # reviews = selected_positive
+    # reviews = selected_negative
+
