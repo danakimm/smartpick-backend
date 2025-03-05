@@ -3,10 +3,8 @@ from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from typing import Dict, Any, List
 from .base import BaseAgent
-import logging
 import json
-
-logger = logging.getLogger("smartpick.agents.question_agent")
+from app.utils.logger import logger
 
 load_dotenv()
 

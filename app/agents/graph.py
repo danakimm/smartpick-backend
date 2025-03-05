@@ -1,8 +1,9 @@
 from langgraph.graph import Graph, END
-from typing import Dict, TypedDict, Annotated, Sequence
+from typing import Dict, TypedDict, Annotated, Sequence, Any, List
 import operator
 import logging
 import asyncio
+from app.utils.logger import logger
 
 class AgentState(TypedDict):
     question: str
@@ -36,8 +37,6 @@ youtube_agent = YouTubeAgent()
 # middleware_agent = MiddlewareAgent()
 # report_agent = ReportAgent()
 feedback_agent = FeedbackAgent()
-
-logger = logging.getLogger("smartpick.agents.graph")
 
 def define_workflow():
     logger.debug("Defining workflow")
