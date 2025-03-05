@@ -117,3 +117,101 @@ class SpecRecommender(BaseAgent):
         """제품의 출시가를 추출하는 함수."""
         match = re.search(r"출시가:\s*([\d,]+)원", str(features_text))
         return int(match.group(1).replace(",", "")) if match else None
+    
+    
+    async def get_product_details(self, product_name: str) -> dict:
+        """
+        Returns detailed specifications and price of the given product.
+        """ 
+        df = pd.read_csv("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/product_details.csv")
+        product_row = df[df["name"] == product_name]
+
+        if product_row.empty:
+            return {
+                "제품명": product_name,
+                "가격": "정보 없음",
+                "추천 이유": {"pros": ["장점 정보 없음"], "cons": ["단점 정보 없음"]},
+                "핵심 사항": []
+            }
+
+        product_data = product_row.iloc[0]
+        price = product_data.get("price", "정보 없음")
+
+        # Extract key specifications
+        core_specs = [
+            {"항목": key.replace("features_", ""), "사양": value, "설명": "사양 설명"}
+            for key, value in product_data.items() if key.startswith("features_") and pd.notna(value)
+        ]
+
+        # LLM 호출하여 장점 & 단점 생성
+        return await self.fetch_product_analysis(product_name, price, core_specs)
+
+    async def fetch_product_analysis(self, product_name: str, price: Any, core_specs: list):
+        """
+        Calls LLM to generate product pros/cons and returns full product details.
+        """
+        try:
+            response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
+                {
+                    "role": "system",
+                    "content": """
+                    당신은 제품 추천 AI입니다. 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
+                    """
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "제품명": product_name,
+                        "가격": price,
+                        "핵심 사항": core_specs
+                    }, ensure_ascii=False)
+                }
+            ])
+
+            response_text = response.content.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()  # 코드 블록 제거
+
+            logger.debug(f"LLM 응답: {response_text}")
+            product_summary = json.loads(response_text)
+            specifications = {
+                            "제품명": product_name,
+                            "가격": price,
+                            "추천 이유": product_summary.get("추천 이유", {"pros": [], "cons": []}),
+                            "핵심 사항": core_specs}
+
+            return {
+                "specifications": specifications,
+                "purchase_info": self.purchase_inform(product_name)
+            }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
+            return {
+                "제품명": product_name,
+                "가격": price,
+                "추천 이유": {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]},
+                "핵심 사항": core_specs
+            }
+
+    
+    
+    def purchase_inform(self, product_name):
+        """
+        purchase csv에서 다나와, 네이버, 쿠팡에 대한 정보 추출
+        """
+        
+        df = pd.read_excel("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/purchase_info.xlsx")
+        df_final = df[df["product_name"] == product_name].reset_index(drop=True)
+
+        purchase_details = {"store":[]}
+        for _, row in df_final.iterrows() :
+            purchase_details["store"].append({
+                            "site" : row["platform"],
+                            "price" : 800000,
+                            "purchase_link": row["purchase_link"],
+                            "rating" : row["rating"]
+                            })
+    
+        return purchase_details
+    
