@@ -3,14 +3,14 @@ import os
 import json
 import pandas as pd
 import re
-import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from langgraph.graph import StateGraph
 from app.agents.base import BaseAgent
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from app.utils.logger import logger
 
-logger = logging.getLogger("smartpick.agents.spec_agent")
+logger.debug(f"SpecRecommend initialized with filepath: {os.getenv('SPEC_DB_PATH')}")
 load_dotenv()
 
 class SpecRecommender(BaseAgent):
@@ -19,7 +19,6 @@ class SpecRecommender(BaseAgent):
         self.product_csv = os.getenv("SPEC_DB_PATH")
         self.persist_directory = persist_directory
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        logger.debug(f"SpecRecommend initialized with filepath: {self.product_csv}")
 
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug(f"Running ProductRecommender with state: {state}")
