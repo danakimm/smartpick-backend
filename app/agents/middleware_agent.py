@@ -15,6 +15,19 @@ class BaseAgent:
         raise NotImplementedError("run method must be implemented")
 
 class MiddlewareAgent(BaseAgent):
+    """
+    run 입력 포멧 dict
+    {"middleware": {"query" : "유저 요청 사항",                                     <- str
+            "product name" : "제품명",                                            <- srt
+            "question" : ["질문에이전트 결과 리스트에 감싸서 입력"],                <- 길이 1 List 안에 dict
+            "youtube" : ["유튜브 에이전트 결과 리스트에 감싸서 입력"],               <- 길이 1 List 안에 dict
+            "review" : ["리뷰 에이전트 결과 리스트에 감싸서 입력"],                 <- 길이 1 List 안에 dict
+            "specification" : ["제품 정보 분석 에이전트 결과 리스트에 감싸서 입력"],  <- 길이 1 List 안에 dict
+            }
+        }
+    """
+    
+    
     def __init__(self):
         self.spec_agent = SpecRecommender()
         self.review_agent = ReviewRecommender()
