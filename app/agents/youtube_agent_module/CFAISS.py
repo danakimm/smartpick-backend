@@ -5,7 +5,6 @@ import os
 import hashlib
 from .queue_manager import add_log
 import openai
-import dotenv
 from langchain.schema import Document, BaseRetriever
 from pydantic import Field
 from typing import Any, List
@@ -17,7 +16,6 @@ def log_wrapper(log_message):
     add_log(log_message)  
 class WrIndexFlatL2:
     def __init__(self, dimension,embedingmodel="text-embedding-3-small"):
-        dotenv.load_dotenv()
         self.dimension = dimension
         """FAISS의 IndexFlatL2를 확장하여 metadata 기능을 추가한 클래스"""
         self.index = faiss.IndexFlatL2(dimension)  # FAISS IndexFlatL2 초기화

@@ -199,7 +199,6 @@ class KeywordExtractor:
         for category, kw_list in self.keywords_by_category.items():
             print(f"[{category}] : {kw_list}")
 
-
 class IndexStorage:
     """
     H5 파일을 사용한 역인덱스 저장소
@@ -400,7 +399,6 @@ class IndexStorage:
                 keywords.append(dataset.attrs['keyword'])
         return keywords
 
-
 class QueryMatcher:
     """
     키워드 기반 쿼리 매칭 알고리즘 클래스
@@ -429,6 +427,9 @@ class QueryMatcher:
             list: 매치된 쿼리 정보 목록 (매치 점수로 정렬됨)
         """
         # 입력이 문자열인 경우 키워드 추출
+        if isinstance(text_or_keywords, list):
+            text_or_keywords=text_or_keywords[0]
+        
         if isinstance(text_or_keywords, str):
             keywords = self.keyword_extractor.extract_keywords(text_or_keywords)
         else:
@@ -483,8 +484,6 @@ class QueryMatcher:
                 return []  # 충분히 확실하지 않으면 결과 반환하지 않음
             # 결과가 하나만 있는 경우나, 상위 결과들이 충분히 높은 점수를 가진 경우
         return matches[:max_results]    
-
-
 
 class KeywordQueryManager:
     """
@@ -727,16 +726,21 @@ class CacheKeywors:
         tier["top20"]=keywords_top80_row.copy()
         return tier
     
-
 class YouTubeCacheSystem:
     def __init__(self,data_path=".quary_to_data.h5",qary_path=".keyword_to_quary.h5"):
         self.cache = CacheManager(data_path)
         self.cache_manager = KeywordQueryManager(qary_path)
     def add_query(self,query_text,data,query_id=None):
+        if isinstance(data,list):
+            data=data[0]
+        if isinstance(query_text,list):
+            query_text=query_text[0]   
         self.cache_manager.add_query(query_text,query_id)
         inpitdict={query_text.replace(" ",""):[data]}
         self.cache.add_hash(inpitdict)
     def find_matching_queries(self,text,min_score=0.5, max_results=3):
+        if isinstance(text,list):
+            text=text[0]
         matches= self.cache_manager.find_matching_queries(text,min_score,max_results)
         if matches:
             find_dict={matches[0]['query_text'].replace(" ",""):""}
@@ -791,223 +795,9 @@ if matches:
     print(f"쿼리 ID: {query_id}")
     """
 
-import os
-import random
-from pprint import pprint
-
-# 테스트 파일 경로
-TEST_FILE_PATH = "keyword_index_test.h5"
-
-# 기존 테스트 파일 삭제 (테스트 전 초기화)
-if os.path.exists(TEST_FILE_PATH):
-    os.remove(TEST_FILE_PATH)
-# 테스트용 원본 쿼리 5개
-original_queries = [
-    "디지털 드로잉용 아이패드 태블릿 추천, 13인치, 반응속도 좋은 펜, 그래픽 작업에 적합한 디스플레이",
-    "노트북 배터리 오래가는 모델 추천, 가벼운 무게, 프로그래밍 작업용, 15인치 이상",
-    "갤럭시탭 S7 vs 아이패드 프로 비교, 영상 시청과 문서 작업에 적합한 태블릿",
-    "가성비 좋은 게이밍 노트북 추천, 램 16GB 이상, 발열 적은 모델, 고사양 게임 가능",
-    "휴대성 좋은 미니 태블릿 추천, 독서 및 웹서핑용, 가볍고 배터리 오래가는 모델"
-]
-
-# 각 원본 쿼리당 3개씩 유사 쿼리 생성 (총 15개)
-similar_queries = [
-    # 디지털 드로잉용 아이패드 관련 유사 쿼리 3개
-    "아이패드 그림 그리기 용도로 추천해주세요, 펜 반응속도가 좋은 것",
-    "디지털 드로잉 태블릿 추천, 디스플레이가 좋은 모델 알려주세요",
-    "아이패드 디지털 아트용 어떤게 좋을까요? 애플펜슬 호환되는 모델",
-    
-    # 배터리 오래가는 노트북 관련 유사 쿼리 3개
-    "프로그래밍 작업용 가벼운 노트북 추천 배터리 수명 긴것",
-    "개발 작업용 배터리 오래가는 노트북은 어떤게 좋을까요?",
-    "코딩용 15인치 노트북 추천, 무게 가볍고 배터리 오래가는 제품",
-    
-    # 갤럭시탭 vs 아이패드 관련 유사 쿼리 3개
-    "태블릿 비교 갤럭시탭과 아이패드 중 영상보기에 좋은 것은?",
-    "문서 작업용 태블릿 추천, 삼성과 애플 제품 중 어느게 나을까요?",
-    "아이패드와 갤럭시탭 비교 리뷰 부탁드려요, 동영상 시청용",
-    
-    # 게이밍 노트북 관련 유사 쿼리 3개
-    "고사양 게임 돌아가는 노트북 추천, 가성비 좋고 발열 적은 모델",
-    "게이밍용 노트북 램 16GB 이상 추천해주세요",
-    "발열 적고 게임 잘 돌아가는 가성비 노트북 추천",
-    
-    # 미니 태블릿 관련 유사 쿼리 3개
-    "가벼운 미니 태블릿 추천, 전자책 읽기 좋은 제품",
-    "웹서핑용 소형 태블릿 뭐가 좋을까요? 배터리 오래가는 모델",
-    "독서용 작은 태블릿 가벼운 제품 추천해주세요"
-]
-
-# 전혀 다른 쿼리 5개 (테스트용)
-unrelated_queries = [
-    "차량용 블루투스 이어폰 추천, 노이즈 캔슬링 기능 있는 제품",
-    "가성비 좋은 커피머신 추천, 원두 분쇄기능 있는 제품",
-    "여행용 디지털 카메라 추천, 4K 동영상 촬영 가능한 모델",
-    "스마트 홈 시스템 구축 방법, IoT 기기 연동 방법",
-    "헬스장 운동기구 추천, 초보자에게 좋은 기구"
-]
-def run_test():
-    # 인덱스 매니저 생성
-    manager = KeywordQueryManager(TEST_FILE_PATH)
-    extractor = KeywordExtractor()  # 직접 키워드 확인용
-    
-    print("=== 키워드 분류기 테스트 ===\n")
-    
-    # 1. 원본 쿼리 등록 및 키워드 분석
-    print("1. 원본 쿼리 등록 및 키워드 분석")
-    print("-" * 50)
-    
-    original_query_ids = []
-    for i, query in enumerate(original_queries):
-        query_id = f"original_{i+1}"
-        manager.add_query(query, query_id)
-        original_query_ids.append(query_id)
-        
-        keywords = extractor.extract_keywords(query)
-        category = extractor.match_category(keywords)
-        tier = extractor.match_tier(keywords)
-        
-        print(f"쿼리 ID: {query_id}")
-        print(f"쿼리: {query}")
-        print(f"추출된 키워드 ({len(keywords)}개): {keywords[:10]}{'...' if len(keywords) > 10 else ''}")
-        
-        print("카테고리별 분류:")
-        for cat_name, cat_kws in category.items():
-            if cat_kws:  # 비어있지 않은 경우만 출력
-                print(f"  - {cat_name}: {cat_kws}")
-        
-        print("티어별 분류:")
-        for tier_name, tier_kws in tier.items():
-            if tier_kws:  # 비어있지 않은 경우만 출력
-                print(f"  - {tier_name}: {tier_kws}")
-        print("-" * 50)
-    
-    print("\n2. 유사 쿼리 매칭 테스트")
-    print("-" * 50)
-    
-    # 2. 유사 쿼리 15개에 대한 매칭 테스트
-    match_results = []
-    for i, query in enumerate(similar_queries):
-        print(f"유사 쿼리 {i+1}: '{query}'")
-        
-        # 키워드 추출
-        keywords = extractor.extract_keywords(query)
-        print(f"추출된 키워드 ({len(keywords)}개): {keywords}")
-        
-        # 유사 쿼리 검색
-        matches = manager.find_matching_queries(query, min_score=0.1)
-        
-        if matches:
-            print("매칭된 원본 쿼리:")
-            for idx, match in enumerate(matches):
-                print(f"  {idx+1}. 쿼리 ID: {match['query_id']}")
-                print(f"     원본 쿼리: {match['query_text'][:70]}{'...' if len(match['query_text']) > 70 else ''}")
-                print(f"     매치 점수: {match['match_score']:.2f}")
-                
-                # 결과 기록 (나중에 정확도 계산용)
-                correct_group = i // 3  # 0, 1, 2, 3, 4 중 하나 (원본 쿼리 그룹)
-                expected_id = f"original_{correct_group+1}"
-                actual_top_id = match['query_id']
-                
-                match_results.append({
-                    'query': query,
-                    'expected_id': expected_id,
-                    'actual_top_id': actual_top_id,
-                    'is_correct': expected_id == actual_top_id,
-                    'score': match['match_score']
-                })
-        else:
-            print("매칭된 쿼리가 없습니다.")
-        print("-" * 50)
-    
-    # 3. 전혀 다른 쿼리 5개에 대한 테스트
-    print("\n3. 관련 없는 쿼리 테스트")
-    print("-" * 50)
-    
-    for i, query in enumerate(unrelated_queries):
-        print(f"관련 없는 쿼리 {i+1}: '{query}'")
-        
-        # 키워드 추출
-        keywords = extractor.extract_keywords(query)
-        print(f"추출된 키워드 ({len(keywords)}개): {keywords}")
-        
-        # 유사 쿼리 검색
-        matches = manager.find_matching_queries(query, min_score=0.1)
-        
-        if matches:
-            print("매칭된 원본 쿼리:")
-            for idx, match in enumerate(matches[:2]):  # 상위 2개만 표시
-                print(f"  {idx+1}. 쿼리 ID: {match['query_id']}")
-                print(f"     원본 쿼리: {match['query_text'][:70]}{'...' if len(match['query_text']) > 70 else ''}")
-                print(f"     매치 점수: {match['match_score']:.2f}")
-                
-            # 낮은 매치 점수를 기대함
-            match_results.append({
-                'query': query,
-                'expected_id': 'none',
-                'actual_top_id': matches[0]['query_id'] if matches else 'none',
-                'is_correct': matches[0]['match_score'] < 0.3 if matches else True,  # 매치 점수가 낮으면 정상
-                'score': matches[0]['match_score'] if matches else 0
-            })
-        else:
-            print("매칭된 쿼리가 없습니다. (정상)")
-            match_results.append({
-                'query': query,
-                'expected_id': 'none',
-                'actual_top_id': 'none',
-                'is_correct': True,
-                'score': 0
-            })
-        print("-" * 50)
-    
-    # 4. 정확도 계산 및 결과 요약
-    correct_count = sum(1 for r in match_results if r['is_correct'])
-    total_count = len(match_results)
-    accuracy = correct_count / total_count
-    
-    print("\n4. 테스트 결과 요약")
-    print("-" * 50)
-    print(f"총 테스트 쿼리 수: {total_count}")
-    print(f"정확히 매칭된 쿼리 수: {correct_count}")
-    print(f"정확도: {accuracy:.2%}")
-    
-    # 유사 쿼리 그룹별 정확도
-    similar_results = match_results[:15]  # 처음 15개는 유사 쿼리
-    similar_correct = sum(1 for r in similar_results if r['is_correct'])
-    similar_accuracy = similar_correct / len(similar_results)
-    print(f"유사 쿼리 매칭 정확도: {similar_accuracy:.2%}")
-    
-    # 관련 없는 쿼리 테스트 결과
-    unrelated_results = match_results[15:]  # 마지막 5개는 관련 없는 쿼리
-    unrelated_correct = sum(1 for r in unrelated_results if r['is_correct'])
-    unrelated_accuracy = unrelated_correct / len(unrelated_results)
-    print(f"관련 없는 쿼리 정확한 분류: {unrelated_accuracy:.2%}")
-    
-    # 개선 제안
-    print("\n5. 성능 개선 제안")
-    print("-" * 50)
-    if accuracy < 0.8:
-        low_scores = [r for r in match_results if not r['is_correct']]
-        print("개선이 필요한 매칭 사례:")
-        for r in low_scores[:3]:  # 상위 3개 실패 사례만
-            print(f"- 쿼리: '{r['query']}'")
-            print(f"  예상 매칭: {r['expected_id']}, 실제 매칭: {r['actual_top_id']}, 점수: {r['score']:.2f}")
-        
-        print("\n개선 제안:")
-        print("1. 키워드 추출 알고리즘 개선 (형태소 분석 방식 변경)")
-        print("2. 티어별 가중치 조정 (티어 점수 가중치 변경)")
-        print("3. 최소 매치 점수 임계값 조정 (현재: 0.1)")
-    else:
-        print("매칭 성능이 우수합니다!")
-    
-    # 파일 닫기
-    manager.close()
-
-
-    
 # 테스트 출력
 if __name__ == "__main__":
-    run_test()
+
 
         # 테스트용 파일 경로 (기존 파일이 있다면 삭제)
     CACHE_FILE = "youtube_cache_test.h5"
@@ -1068,7 +858,7 @@ if __name__ == "__main__":
     if result:
         matched_data, matched_query_id = result
         print("매칭된 데이터:")
-        pprint(matched_data)
+       # pprint(matched_data)
         print("매칭된 쿼리 ID:", matched_query_id)
     else:
         print("매칭되는 쿼리가 없습니다.")
