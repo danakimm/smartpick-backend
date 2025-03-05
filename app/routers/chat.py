@@ -14,9 +14,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     active_connections[client_id] = websocket
     
-    # WebSocket timeout 설정
-    websocket.client.timeout = 60.0  # 60초 timeout 설정
-
     try:
         question_agent = QuestionAgent()
         state = {}
