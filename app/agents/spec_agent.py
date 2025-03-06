@@ -60,6 +60,8 @@ class SpecRecommender(BaseAgent):
         
         return context
     
+    import json
+
     async def summarize_features(self, context, user_input):
         """제품 추천을 요약하는 함수."""
 
@@ -99,14 +101,31 @@ class SpecRecommender(BaseAgent):
             ])
 
             response_text = response.content.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()  # 코드 블록 제거
-            print("LLM 응답:", response_text)
-            return json.loads(response_text)
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
-            return None
+            # ✅ 코드 블록 제거 (```json ... ```)
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()
+
+            print("LLM 응답:", response_text)
+
+            # ✅ JSON 포맷 검증
+            try:
+                parsed_response = json.loads(response_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ JSON 변환 실패: {e}, 응답 내용: {response_text}")
+                return {"error": "JSON 형식 오류 발생"}
+
+            # ✅ JSON 내부 구조 검증
+            if not isinstance(parsed_response, dict):
+                logger.error(f"❌ 예상된 dict 구조가 아님: {parsed_response}")
+                return {"error": "LLM 응답이 예상된 dict 구조가 아님"}
+
+            return parsed_response
+
+        except Exception as e:
+            logger.error(f"❌ summarize_features 오류: {e}")
+            return {"error": "추천 생성 중 오류 발생"}
+
 
 
     def extract_price(self, features_text):
