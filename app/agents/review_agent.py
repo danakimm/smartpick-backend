@@ -52,38 +52,50 @@ class ProductRecommender(BaseAgent):
         search_queries = []
         
         # 주요 활동 관련 리뷰
-        search_queries.extend(requirements['사용_시나리오']['주요_활동'])
+        search_queries.extend([f"{activity} 사용 경험" for activity in requirements['사용_시나리오']['주요_활동']])
         
         # 사용 환경 관련 리뷰
-        search_queries.extend(requirements['사용_시나리오']['사용_환경'])
+        search_queries.extend([f"{env}에서 사용" for env in requirements['사용_시나리오']['사용_환경']])
         
         # 사용 시간 관련 리뷰
-        search_queries.append(requirements['사용_시나리오']['사용_시간'])
+        search_queries.append(f"사용 시간 {requirements['사용_시나리오']['사용_시간']}")
 
         # 사용자 수준 관련 리뷰
-        search_queries.append(requirements['사용_시나리오']['사용자_수준'])
+        search_queries.append(f"{requirements['사용_시나리오']['사용자_수준']} 사용자")
         
         # 브랜드 선호도 관련 리뷰
         search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
         
         # 불편사항 관련 리뷰
-        search_queries.extend(requirements['주요_관심사']['불편사항'])
+        search_queries.extend([f"{issue} 문제" for issue in requirements['주요_관심사']['불편사항']])
         
         # 만족도 중요항목 관련 리뷰
-        search_queries.extend(requirements['주요_관심사']['만족도_중요항목'])
+        search_queries.extend([f"{item} 만족" for item in requirements['주요_관심사']['만족도_중요항목']])
         
         # 디자인 선호도 관련 리뷰
-        search_queries.extend(requirements['감성적_요구사항']['디자인_선호도'])
+        search_queries.extend([f"디자인 {pref}" for pref in requirements['감성적_요구사항']['디자인_선호도']])
         
         # 가격대 관련 리뷰 - '상관없음'이 아닐 때만 포함
-        if requirements['감성적_요구사항']['가격대_심리'] != "상관없음":
-            search_queries.append(requirements['감성적_요구사항']['가격대_심리'])
+        price_sentiment = requirements['감성적_요구사항']['가격대_심리']
+        if price_sentiment != "상관없음":
+            if "저렴" in price_sentiment:
+                search_queries.extend(["가격 저렴", "가성비", "합리적인 가격"])
+            elif "비싸" in price_sentiment:
+                search_queries.extend(["가격이 비싸", "고가", "프리미엄"])
+            else:
+                search_queries.append(f"가격 {price_sentiment}")
         
         # 우려사항 관련 리뷰
-        search_queries.extend(requirements['사용자_우려사항'])
+        search_queries.extend([f"{worry} 경험" for worry in requirements['사용자_우려사항']])
         
-        # 빈 문자열이나 None 값 제거
-        search_queries = [query for query in search_queries if query and query.strip()]
+        # 빈 문자열이나 None 값 제거 및 중복 제거
+        search_queries = list(set([
+            query.strip() 
+            for query in search_queries 
+            if query and query.strip()
+        ]))
+
+        logger.debug(f"Generated search queries: {search_queries}")
 
         # 각 관점별로 리뷰 검색
         all_reviews = []
@@ -144,8 +156,15 @@ class ProductRecommender(BaseAgent):
 
         if not relevant_products:
             return {
-                "recommendations": "주어진 조건에 맞는 제품을 찾을 수 없습니다.",
-                "reason": "검색된 리뷰가 없습니다."
+                "recommendations": [
+                    {
+                        "rank": 1,
+                        "product_name": "추천 가능한 제품 없음",
+                        "reasons": ["주어진 조건에 맞는 제품을 찾을 수 없습니다."],
+                        "suitability": ["검색된 리뷰가 없습니다."],
+                        "review_sources": []
+                    }
+                ]
             }
 
         # 리뷰 컨텍스트 생성 - 각 제품별로 여러 리뷰 종합
@@ -198,8 +217,8 @@ class ProductRecommender(BaseAgent):
         1. 반드시 제공된 리뷰에 언급된 제품만 추천해야 합니다
         2. 실제 리뷰 내용만 인용해야 합니다
         3. 리뷰에 없는 기능이나 특징을 임의로 추가하면 안됩니다
-        4. 사용자의 구체적인 요구사항(사용 환경, 사용 시간 등)에 맞춰 추천해주세요
-        5. 추천할 때는 반드시 관련된 실제 리뷰를 인용하고, 해당 리뷰의 출처 플랫폼을 명시해주세요
+        4. 사용자의 구체적인 요구사항과 제품의 특성을 매칭하여 추천 이유를 설명하세요
+        5. 각 추천 이유는 반드시 구체적인 리뷰 인용과 해당 리뷰의 출처 플랫폼을 포함해야 합니다
         6. 제시된 형식을 정확히 따라주세요
         7. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
 
