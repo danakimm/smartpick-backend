@@ -210,13 +210,24 @@ class SpecRecommender(BaseAgent):
                 {
                     "role": "system",
                     "content": """
-                    당신은 제품 추천 AI입니다. 사용자의 요구 사항과 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
+                    당신은 제품 추천 AI입니다. 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
                     또한, '핵심 사항'에 대해 '항목'과 '사양'을 참고하여 반드시 각 사양에 대한 구체적인 '설명'을 생성하세요.
-                    예를 들어:
-                    - '카메라' 사양이 주어지면, 카메라의 해상도, 영상 촬영 가능 여부, 조도 환경에서의 성능 등을 분석하여 설명하세요.
-                    - '배터리' 사양이 주어지면, 대기 시간, 고속 충전 지원 여부 등을 포함하세요.
-                    - '화면' 사양이 주어지면, 디스플레이 기술, 주사율, 색상 표현력 등을 포함하세요.
-                    설명이 부족하면 상세한 정보를 기반으로 의미 있는 문장을 작성하세요.
+                    응답 예시는 아래와 같습니다:
+                    ```json
+                    {
+                        "추천 이유": {
+                            "장점": ["장점 1", "장점 2", "장점 3"],
+                            "단점": ["단점 1", "단점 2", "단점 3"]
+                        },
+                        "핵심 사항": [
+                            {
+                                "항목": "카메라",
+                                "사양": "50MP",
+                                "설명": "이 카메라는 저조도에서도 선명한 사진을 촬영할 수 있음."
+                            }
+                        ]
+                    }
+                    ```
                     """
                 },
                 {
@@ -230,42 +241,17 @@ class SpecRecommender(BaseAgent):
             ])
 
             response_text = response.content.strip()
-            print(f"🔍 LLM 응답 원본: {response_text}")
 
-            # JSON 응답 코드 블록 제거
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
-
+            # JSON 변환
             product_summary = json.loads(response_text)
 
-            # 응답 데이터 확인
-            # if "추천 이유" not in product_summary:
-                #logger.error(f"❌ '추천 이유'가 LLM 응답에 없음: {product_summary}")
-                #product_summary["추천 이유"] = {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]}
+            # ✅ "추천 이유"가 없으면 기본값 추가
+            if "추천 이유" not in product_summary:
+                product_summary["추천 이유"] = {"장점": ["정보 없음"], "단점": ["정보 없음"]}
 
-            # if "핵심 사항" not in product_summary:
-                #logger.error(f"❌ '핵심 사항'이 LLM 응답에 없음: {product_summary}")
-                #product_summary["핵심 사항"] = []
-
-            # LLM 응답에 설명이 없으면 보완
-            updated_core_specs = []
-            for spec in core_specs:
-                llm_spec = next((s for s in product_summary["핵심 사항"] if s["항목"] == spec["항목"]), None)
-
-                # 설명이 없는 경우 템플릿 설명 추가
-                설명 = llm_spec["설명"] if llm_spec and "설명" in llm_spec else self.generate_fallback_description(spec["항목"], spec["사양"])
-
-                updated_core_specs.append({
-                    "항목": spec["항목"],
-                    "사양": spec["사양"],
-                    "설명": 설명
-                })
-
-            # 최종 정제된 제품 정보 반환
-            print(product_summary)
             specifications = {
                 "추천 이유": product_summary["추천 이유"],
-                "핵심 사항": updated_core_specs
+                "핵심 사항": product_summary.get("핵심 사항", core_specs)  # LLM 응답이 없으면 기존 데이터 유지
             }
 
             return {
@@ -276,10 +262,11 @@ class SpecRecommender(BaseAgent):
         except json.JSONDecodeError as e:
             logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
             return {
-                "제품명": product_name,
-                "가격": price,
-                "추천 이유": {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]},
-                "핵심 사항": core_specs
+                "specifications": {
+                    "추천 이유": {"장점": ["정보 없음"], "단점": ["정보 없음"]},
+                    "핵심 사항": core_specs
+                },
+                "purchase_info": self.purchase_inform(product_name)
             }
 
 
