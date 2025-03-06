@@ -36,135 +36,141 @@ middleware_agent = MiddlewareAgent(review_agent=review_agent, spec_agent=spec_ag
 report_agent = ReportAgent()
 feedback_agent = FeedbackAgent()
 
-def define_workflow():
-    logger.debug("Defining workflow")
-    workflow = Graph()
+async def parallel_analysis(state: AgentState) -> Dict:
+    try:
+        youtube_results, review_results, spec_results = await asyncio.gather(
+            youtube_agent.run(state["youtube_agent_state"]['youtube_analysis']),
+            review_agent.run(state["review_agent_state"]['review_analysis']),
+            spec_agent.run(state["spec_agent_state"]['spec_analysis']),
+            return_exceptions=True
+        )
 
-    async def parallel_analysis(state: AgentState) -> Dict:
-        try:
-            # 병렬로 실행하기 위해 asyncio.gather 사용
-            youtube_results, review_results, spec_results = await asyncio.gather(
-                # Review 분석 실행
-                youtube_agent.run(state["youtube_agent_state"]['youtube_analysis']),
-                review_agent.run(state["review_agent_state"]['review_analysis']),
-                spec_agent.run(state["spec_agent_state"]['spec_analysis']),
-                return_exceptions=True
-            )
-
-            results = {
-                "youtube_results": {} if isinstance(youtube_results, Exception) else youtube_results,
-                "review_results": {} if isinstance(review_results, Exception) else review_results,
-                "spec_results": {} if isinstance(spec_results, Exception) else spec_results,
-            }
-            
-            logger.debug(f"Parallel analysis results: {results}")  # 로깅 추가
-            return results
-        except Exception as e:
-            logger.error(f"Error in parallel analysis: {e}")
-            return {"error": "병렬 분석 중 오류 발생"}
-
-    async def middleware_processing(state: AgentState) -> Dict:
-        try:
-            # middleware에 필요한 정보만 전달
-            middleware_input = {
-                "question": state["question"],
-                "youtube_results": state["youtube_results"],
-                "review_results": state["review_results"],
-                "spec_results": state["spec_results"]
-            }
-            
-            result = await middleware_agent.run(middleware_input)
-            return {"middleware_results": result}
-            
-        except Exception as e:
-            logger.error(f"Error in middleware processing: {e}")
-            return {"error": "미들웨어 처리 중 오류 발생"}
-
-    async def report_generation(state: AgentState) -> Dict:
-        logger.debug(f"Report input state: {state}")  # 입력 상태 로깅
+        results = {
+            "youtube_results": {} if isinstance(youtube_results, Exception) else youtube_results,
+            "review_results": {} if isinstance(review_results, Exception) else review_results,
+            "spec_results": {} if isinstance(spec_results, Exception) else spec_results,
+        }
         
-        try:
-            final_result = {
-                "final_report": state["middleware_results"]["recommendations"],
-                "analysis": state["middleware_results"]["analysis"]
-            }
-            logger.debug(f"Final result: {final_result}")  # 결과 로깅
-            return final_result
-            
-        except Exception as e:
-            logger.error(f"Error in report generation: {e}")
-            return {
-                "final_report": "최종 보고서 생성 중 오류가 발생했습니다.",
-                "analysis": {}
-            }
+        logger.debug(f"Parallel analysis results: {results}")
+        return results
+    except Exception as e:
+        logger.error(f"Error in parallel analysis: {e}")
+        return {"error": "병렬 분석 중 오류 발생"}
 
-    async def handle_feedback(state: AgentState) -> Dict:
-        logger.debug(f"Processing feedback: {state['feedback']}")
+async def middleware_processing(state: AgentState) -> Dict:
+    try:
+        middleware_input = {
+            "question": state["question"],
+            "youtube_results": state["youtube_results"],
+            "review_results": state["review_results"],
+            "spec_results": state["spec_results"]
+        }
+        
+        result = await middleware_agent.run(middleware_input)
+        return {"middleware_results": result}
+        
+    except Exception as e:
+        logger.error(f"Error in middleware processing: {e}")
+        return {"error": "미들웨어 처리 중 오류 발생"}
 
-        feedback_result = await feedback_agent.run({
-            "feedback": state["feedback"],
-            "original_requirements": state["question"],
-            "current_recommendations": state["middleware_results"]
-        })
+async def report_generation(state: AgentState) -> Dict:
+    logger.debug(f"Report input state: {state}")
+    
+    try:
+        final_result = {
+            "final_report": state["middleware_results"]["recommendations"],
+            "analysis": state["middleware_results"]["analysis"]
+        }
+        logger.debug(f"Final result: {final_result}")
+        return final_result
+        
+    except Exception as e:
+        logger.error(f"Error in report generation: {e}")
+        return {
+            "final_report": "최종 보고서 생성 중 오류가 발생했습니다.",
+            "analysis": {}
+        }
 
-        feedback_type = feedback_result["feedback_type"]
+async def handle_feedback(state: AgentState) -> Dict:
+    logger.debug(f"Processing feedback: {state['feedback']}")
 
-        if feedback_type == "refinement":
-            # 기존 요구사항과 새로운 요구사항을 결합
-            combined_requirements = f"""
-            기존 요구사항: {state['question']}
-            추가/수정된 요구사항: {feedback_result['refined_requirements']}
-            """
+    feedback_result = await feedback_agent.run({
+        "feedback": state["feedback"],
+        "original_requirements": state["question"],
+        "current_recommendations": state["middleware_results"]
+    })
 
-            new_agent_states = await question_agent._prepare_agent_states(combined_requirements)
+    feedback_type = feedback_result["feedback_type"]
 
-            return {
-                "question": combined_requirements,
-                "feedback_type": feedback_type,
-                "refined_requirements": feedback_result["refined_requirements"],
-                "feedback": "",
-                "feedback_response": "",
-                "youtube_agent_state": new_agent_states["youtube_agent_state"],
-                "review_agent_state": new_agent_states["review_agent_state"],
-                "spec_agent_state": new_agent_states["spec_agent_state"]
-            }  # parallel_analysis는 conditional edge를 통해 실행
-        else:
-            # 단순 질문 처리
-            return {
-                "feedback_response": feedback_result["response"],
-                "feedback_type": feedback_type,
-                "feedback": "",  # 처리된 피드백 초기화
-            }
+    if feedback_type == "refinement":
+        # 기존 요구사항과 새로운 요구사항을 결합
+        combined_requirements = f"""
+        기존 요구사항: {state['question']}
+        추가/수정된 요구사항: {feedback_result['refined_requirements']}
+        """
+
+        new_agent_states = await question_agent._prepare_agent_states(combined_requirements)
+
+        return {
+            "question": combined_requirements,
+            "feedback_type": feedback_type,
+            "refined_requirements": feedback_result["refined_requirements"],
+            "youtube_agent_state": new_agent_states["youtube_agent_state"],
+            "review_agent_state": new_agent_states["review_agent_state"],
+            "spec_agent_state": new_agent_states["spec_agent_state"]
+        }
+    else:
+        # 단순 질문 처리
+        return {
+            "feedback_response": feedback_result["response"],
+            "feedback_type": feedback_type
+        }
+
+def define_initial_workflow():
+    """초기 분석을 위한 워크플로우 정의"""
+    logger.debug("Defining initial workflow")
+    workflow = Graph()
 
     # 노드 추가
     workflow.add_node("parallel_analysis", parallel_analysis)
     workflow.add_node("middleware_processing", middleware_processing)
     workflow.add_node("report_generation", report_generation)
-    workflow.add_node("handle_feedback", handle_feedback)
 
     # 엣지 정의
     workflow.set_entry_point("parallel_analysis")
     workflow.add_edge("parallel_analysis", "middleware_processing")
     workflow.add_edge("middleware_processing", "report_generation")
+    workflow.add_edge("report_generation", END)
 
+    return workflow
 
-    workflow.add_conditional_edges(
-        "report_generation",
-        path=lambda x: "feedback" in x,
-        path_map={
-            True: "handle_feedback",  # 피드백이 있으면 피드백 처리로
-            False: END  # None 대신 END 사용
-        }
-    )
+def define_feedback_workflow():
+    """피드백 처리를 위한 워크플로우 정의"""
+    logger.debug("Defining feedback workflow")
+    workflow = Graph()
 
-    # 피드백 처리 후의 조건부 엣지
+    # 노드 추가 (동일한 외부 함수 참조)
+    workflow.add_node("handle_feedback", handle_feedback)
+    workflow.add_node("parallel_analysis", parallel_analysis)
+    workflow.add_node("middleware_processing", middleware_processing)
+    workflow.add_node("report_generation", report_generation)
+
+    # 피드백 워크플로우 엣지 정의
+    workflow.set_entry_point("handle_feedback")
+    
+    # 피드백 타입에 따른 조건부 엣지
     workflow.add_conditional_edges(
         "handle_feedback",
         path=lambda x: x["feedback_type"] == "refinement",
         path_map={
             True: "parallel_analysis",  # 재분석 필요시
-            False: "handle_feedback"  # 단순 질문시
+            False: END  # 단순 질문시
         }
     )
+
+    # refinement인 경우의 추가 흐름
+    workflow.add_edge("parallel_analysis", "middleware_processing")
+    workflow.add_edge("middleware_processing", "report_generation")
+    workflow.add_edge("report_generation", END)
 
     return workflow
