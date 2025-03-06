@@ -17,6 +17,7 @@ class SpecRecommender(BaseAgent):
     def __init__(self, persist_directory: str = None):
         super().__init__(name="SpecRecommender")
         self.product_csv = os.getenv("SPEC_DB_PATH")
+        self.purchase_info = os.getenv("PURCHASE_INFO_PATH")
         self.persist_directory = persist_directory
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
 
@@ -118,7 +119,7 @@ class SpecRecommender(BaseAgent):
         """
         Returns detailed specifications and price of the given product.
         """
-        df = pd.read_csv("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/product_details.csv")
+        df = pd.read_csv(self.product_csv)
         product_row = df[df["name"] == product_name]
 
         print(f"🔍 검색된 제품명: {product_name}, 결과: {product_row}")
@@ -236,7 +237,7 @@ class SpecRecommender(BaseAgent):
         purchase csv에서 다나와, 네이버, 쿠팡에 대한 정보 추출
         """
 
-        df = pd.read_excel("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/purchase_info.xlsx")
+        df = pd.read_excel(self.purchase_info)
         df_final = df[df["product_name"] == product_name].reset_index(drop=True)
 
         purchase_details = {"store":[]}
