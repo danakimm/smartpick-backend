@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from app.utils.logger import logger
+from app.agents.graph import AgentState 
 
 load_dotenv()
 
@@ -18,7 +19,7 @@ class MiddlewareAgent:
         self.review_agent = review_agent
         #self.youtube_agent = youtube_agent
 
-    async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def run(self, state: AgentState) -> Dict[str, Any]:
         """
         MiddlewareAgent receives state from parallel_analysis, generates top 3 recommended products,
         then fetches product details from Spec, Review, and YouTube Agents.
@@ -27,9 +28,9 @@ class MiddlewareAgent:
         print("🔎 MiddlewareAgent 시작...")
 
         # 1️⃣ Get parallel analysis results (fallback to empty dict if missing)
-        review_results = state.get("review_results", {})
-        spec_results = state.get("spec_results", {})
-        youtube_results = state.get("youtube_results", {})
+        review_results = state["review_results"]
+        spec_results = state["spec_results"]
+        youtube_results = state["youtube_results"]
 
         # 2️⃣ Generate final recommendations using LLM
         final_recommendation = await self.generate_final_recommendation(review_results, spec_results, youtube_results)
@@ -97,33 +98,25 @@ class MiddlewareAgent:
             logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
             return {"error": "최종 추천을 생성하는 중 오류 발생"}
 
-    async def fetch_product_details(self, recommended_products: List[str], state : Dict[str, Any], youtube_results : Dict[str, Any]):
+    async def fetch_product_details(self, recommended_products: List[str], state: AgentState, youtube_results: Dict[str, Any]):
         """
         Extracts detailed information (price, pros/cons, specifications) for each recommended product.
         """
-        # 3개면 for문 돌려야 하고 1개면 그냥 이대로 
-        # product_details = {}
-
-        #for product in recommended_products:
-        #query = (state or {}).get('question', {}).get("query", "질문 정보 없음")
-        query = state.get("question", "질문 정보 없음")
-        print(query)
-        #query = state.get("question_info", {}).get("query", "질문 정보 없음")
+        query = state["question"]
+        logger.debug(f"Query from state: {query}")
+        
         spec_info = await self.spec_agent.get_product_details(recommended_products[0])
         review_info = await self.review_agent.get_product_details(recommended_products[0])
         youtube_info = youtube_results
 
         product_details = {
-
-            "query" : query, #유저 요청 사항#,
-            "product name" : recommended_products[0], # 제품명
-            "question": [state],   # 질문 에이전트
-            "youtube": [youtube_info],  # 유튜브 에이전트
-            "review": [review_info], # 리뷰 에이전트
-            "specification" : [spec_info] # 특성 에이전트 + 가격, 별점, 링크
-        
+            "query": query,
+            "product name": recommended_products[0],
+            "question": [state],
+            "youtube": [youtube_info],
+            "review": [review_info],
+            "specification": [spec_info]
         }
 
         print(product_details)
-
         return product_details  
