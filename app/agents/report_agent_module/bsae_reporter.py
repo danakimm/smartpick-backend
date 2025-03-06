@@ -261,9 +261,9 @@ class BaseReporter:
                 if result:
                     if len( self.selfquestion)>0:
                         try:
-                            print (f'질문 : {result['selfquestion']}')
+                            print (f"질문 : {result['selfquestion']}")
                             if "answer" in result.keys():
-                                print (f'답변 : {result['answer']}')
+                                print (f"답변 : {result['answer']}")
                             self.selfanswer.append(result['answer'])
                             
                         except Exception as e:

@@ -727,7 +727,7 @@ class CacheKeywors:
         return tier
     
 class YouTubeCacheSystem:
-    def __init__(self,data_path=".quary_to_data.h5",qary_path=".keyword_to_quary.h5"):
+    def __init__(self,data_path="./quary_to_data.h5",qary_path="./keyword_to_quary.h5"):
         self.cache = CacheManager(data_path)
         self.cache_manager = KeywordQueryManager(qary_path)
     def add_query(self,query_text,data,query_id=None):
