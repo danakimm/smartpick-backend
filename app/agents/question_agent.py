@@ -211,7 +211,7 @@ class QuestionAgent(BaseAgent):
                             {"role": "user", "content": user_input}
                         ],
                         "requirements": state.get("requirements"),
-                        "status": "completed"
+                        "status": "requirements_collected"
                     }
                 else:
                     # 수정 요청 처리
