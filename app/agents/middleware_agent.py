@@ -103,8 +103,7 @@ class MiddlewareAgent:
         Extracts detailed information (price, pros/cons, specifications) for each recommended product.
         """
         query = state["question"]
-        logger.debug(f"Query from state: {query}")
-        
+
         spec_info = await self.spec_agent.get_product_details(recommended_products[0])
         review_info = await self.review_agent.get_product_details(recommended_products[0])
         youtube_info = youtube_results
