@@ -1,7 +1,6 @@
 from langgraph.graph import Graph, END
 from typing import Dict, TypedDict, Annotated, Sequence, Any, List
 import operator
-import logging
 import asyncio
 from app.utils.logger import logger
 
@@ -26,23 +25,16 @@ from .question_agent import QuestionAgent
 from .review_agent import ProductRecommender
 from .spec_agent import SpecRecommender
 from .youtube_agent import YouTubeAgent
-# from .middleware_agent import MiddlewareAgent
-# from .report_agent import ReportAgent
+from .middleware_agent import MiddlewareAgent
+from .report_agent import ReportAgent
 from .feedback_agent import FeedbackAgent
 
 question_agent = QuestionAgent()
 review_agent = ProductRecommender()
 spec_agent = SpecRecommender()
-# youtube_agent = YouTubeAgent()
-# 수정
-middleware_agent = MiddlewareAgent(
-    review_agent=review_agent,
-    spec_agent=spec_agent,
-    # youtube_agent=youtube_agent
-                                   )
 youtube_agent = YouTubeAgent()
-# middleware_agent = MiddlewareAgent()
-# report_agent = ReportAgent()
+middleware_agent = MiddlewareAgent(review_agent=review_agent, spec_agent=spec_agent) #, youtube_agent=youtube_agent)
+report_agent = ReportAgent()
 feedback_agent = FeedbackAgent()
 
 def define_workflow():
@@ -58,7 +50,7 @@ def define_workflow():
             spec_agent.run(state["spec_agent_state"]["spec_analysis"]),
         )
         
-        #logger.debug(f"Review results: {review_results}")  # 로깅 추가
+        logger.debug(f"Review results: {review_results}")  # 로깅 추가
         logger.debug(f"Spec results: {spec_results}")
         
         results = {

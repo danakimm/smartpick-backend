@@ -1,12 +1,11 @@
 import asyncio
 import os
 import json
-import logging
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from app.utils.logger import logger
 
-logger = logging.getLogger("smartpick.agents.middleware_agent")
 load_dotenv()
 
 class MiddlewareAgent:
