@@ -46,6 +46,7 @@ async def parallel_analysis(state: AgentState) -> Dict:
         )
 
         results = {
+            **state,
             "youtube_results": {} if isinstance(youtube_results, Exception) else youtube_results,
             "review_results": {} if isinstance(review_results, Exception) else review_results,
             "spec_results": {} if isinstance(spec_results, Exception) else spec_results,
@@ -56,29 +57,31 @@ async def parallel_analysis(state: AgentState) -> Dict:
         return results
     except Exception as e:
         logger.error(f"Error in parallel analysis: {e}")
-        return {"error": "병렬 분석 중 오류 발생"}
+        return {**state, "error": "병렬 분석 중 오류 발생"}
 
 async def middleware_processing(state: AgentState) -> Dict:
     try:
         result = await middleware_agent.run(state)
-        return {"middleware_results": result}
-        
+        return {
+            **state,  # 기존 state 유지
+            "middleware_results": result
+        }
     except Exception as e:
         logger.error(f"Error in middleware processing: {e}")
-        return {"error": "미들웨어 처리 중 오류 발생"}
+        return {**state, "error": "미들웨어 처리 중 오류 발생"}
 
 async def report_generation(state: AgentState) -> Dict:
     logger.debug(f"Report input state: {state}")
-    
     try:
         report_result = await report_agent.run(state['middleware_results'])
         logger.debug(f"Final result: {report_result}")
-        return {"report_results": report_result}
-        
+        return {
+            **state,  # 기존 state 유지
+            "report_results": report_result
+        }
     except Exception as e:
         logger.error(f"Error in report generation: {e}")
-        return {"error": "리포트 생성 중 오류 발생"}
-
+        return {**state, "error": "리포트 생성 중 오류 발생"}
 
 async def handle_feedback(state: AgentState) -> Dict:
     logger.debug(f"Processing feedback: {state['feedback']}")
@@ -92,7 +95,6 @@ async def handle_feedback(state: AgentState) -> Dict:
     feedback_type = feedback_result["feedback_type"]
 
     if feedback_type == "refinement":
-        # 기존 요구사항과 새로운 요구사항을 결합
         combined_requirements = f"""
         기존 요구사항: {state['question']}
         추가/수정된 요구사항: {feedback_result['refined_requirements']}
@@ -101,6 +103,7 @@ async def handle_feedback(state: AgentState) -> Dict:
         new_agent_states = await question_agent._prepare_agent_states(combined_requirements)
 
         return {
+            **state,  # 기존 state 유지
             "question": combined_requirements,
             "feedback_type": feedback_type,
             "refined_requirements": feedback_result["refined_requirements"],
@@ -109,8 +112,8 @@ async def handle_feedback(state: AgentState) -> Dict:
             "spec_agent_state": new_agent_states["spec_agent_state"]
         }
     else:
-        # 단순 질문 처리
         return {
+            **state,  # 기존 state 유지
             "feedback_response": feedback_result["response"],
             "feedback_type": feedback_type
         }
