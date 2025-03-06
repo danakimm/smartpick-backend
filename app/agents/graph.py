@@ -51,7 +51,8 @@ async def parallel_analysis(state: AgentState) -> Dict:
             "spec_results": {} if isinstance(spec_results, Exception) else spec_results,
         }
         
-        logger.debug(f"Parallel analysis results: {results}")
+        logger.debug(f'Parallel analysis review_results: {review_results}')
+        logger.debug(f'Parallel analysis spec_results: {spec_results}')
         return results
     except Exception as e:
         logger.error(f"Error in parallel analysis: {e}")

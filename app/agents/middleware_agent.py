@@ -52,9 +52,9 @@ class MiddlewareAgent:
         try:
             # 3️⃣ Safe input handling (use defaults if data is missing)
             llm_input = {
-                "사용자 리뷰 분석": [],#review_data.get("recommendations", ["리뷰 데이터 없음"]),
+                "사용자 리뷰 분석": review_data.get("recommendations", ["리뷰 데이터 없음"]),
                 "제품 스펙 추천": spec_data.get("추천 제품", ["스펙 데이터 없음"]),
-                "유튜브 리뷰 분석": []#youtube_data.get("reviews", ["유튜브 리뷰 데이터 없음"])
+                "유튜브 리뷰 분석": youtube_data.get("reviews", ["유튜브 리뷰 데이터 없음"])
             }
 
             print(llm_input)
