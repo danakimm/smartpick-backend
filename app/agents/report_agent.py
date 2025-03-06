@@ -1,4 +1,4 @@
-from base import BaseAgent
+from .base import BaseAgent
 from app.agents.report_agent_module.template_generator import ResultTemplate, Product, Reviews, Purchase_Info_Stores
 from app.agents.report_agent_module.youtube_reporter import youtube_main
 from app.agents.report_agent_module.review_reporter import review_main

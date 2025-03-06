@@ -59,14 +59,7 @@ async def parallel_analysis(state: AgentState) -> Dict:
 
 async def middleware_processing(state: AgentState) -> Dict:
     try:
-        middleware_input = {
-            "question": state["question"],
-            "youtube_results": state["youtube_results"],
-            "review_results": state["review_results"],
-            "spec_results": state["spec_results"]
-        }
-        
-        result = await middleware_agent.run(middleware_input)
+        result = await middleware_agent.run(state)
         return {"middleware_results": result}
         
     except Exception as e:

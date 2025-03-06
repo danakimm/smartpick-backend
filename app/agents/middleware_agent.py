@@ -105,7 +105,8 @@ class MiddlewareAgent:
         # product_details = {}
 
         #for product in recommended_products:
-        query = (state or {}).get("question_info", {}).get("query", "질문 정보 없음")
+        #query = (state or {}).get('question', {}).get("query", "질문 정보 없음")
+        query = state.get("question", "질문 정보 없음")
         print(query)
         #query = state.get("question_info", {}).get("query", "질문 정보 없음")
         spec_info = await self.spec_agent.get_product_details(recommended_products[0])
