@@ -61,6 +61,12 @@ class SpecRecommender(BaseAgent):
         return context
     
     import json
+    import json
+    import re
+    import logging
+    from openai import ChatOpenAI
+
+    logger = logging.getLogger(__name__)
 
     async def summarize_features(self, context, user_input):
         """제품 추천을 요약하는 함수."""
@@ -83,12 +89,28 @@ class SpecRecommender(BaseAgent):
             ]
 
             # LLM 호출
-            response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
+            response = await ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.3,
+                api_key=self.openai_api_key
+            ).ainvoke([
                 {
                     "role": "system",
                     "content": """
-                    당신은 제품 추천 AI입니다. 사용자의 요구 사항과 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
-                    '항목'과 '사양'을 기반으로 제품의 특징을 정리하고, 사용자의 요청과 어떻게 부합하는지를 설명하세요.
+                    당신은 제품 추천 AI입니다. 사용자의 요구 사항과 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON 형식으로 반환하세요.
+                    응답은 반드시 **아래 JSON 형식만 포함해야 합니다.**
+                    ```json
+                    {
+                        "추천 제품": [
+                            {
+                                "제품명": "제품명",
+                                "장점": ["장점 1", "장점 2", "장점 3"],
+                                "단점": ["단점 1", "단점 2", "단점 3"]
+                            }
+                        ]
+                    }
+                    ```
+                    **코드 블록(```json ... ```) 없이 JSON만 출력하세요.**
                     """
                 },
                 {
@@ -101,14 +123,20 @@ class SpecRecommender(BaseAgent):
             ])
 
             response_text = response.content.strip()
+            logger.info(f"LLM 응답: {response_text}")
 
-            # ✅ 코드 블록 제거 (```json ... ```)
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
+            # ✅ JSON만 추출하는 함수
+            def extract_json(text):
+                match = re.search(r"\{.*\}", text, re.DOTALL)
+                return match.group(0) if match else None
 
-            print("LLM 응답:", response_text)
+            # ✅ JSON 응답 정제
+            response_text = extract_json(response_text)
+            if response_text is None:
+                logger.error(f"❌ JSON을 찾을 수 없음, 응답 내용: {response.content}")
+                return {"error": "올바른 JSON을 찾을 수 없음"}
 
-            # ✅ JSON 포맷 검증
+            # ✅ JSON 파싱
             try:
                 parsed_response = json.loads(response_text)
             except json.JSONDecodeError as e:
@@ -116,15 +144,19 @@ class SpecRecommender(BaseAgent):
                 return {"error": "JSON 형식 오류 발생"}
 
             # ✅ JSON 내부 구조 검증
-            if not isinstance(parsed_response, dict):
-                logger.error(f"❌ 예상된 dict 구조가 아님: {parsed_response}")
-                return {"error": "LLM 응답이 예상된 dict 구조가 아님"}
+            if not isinstance(parsed_response, dict) or "추천 제품" not in parsed_response:
+                logger.error(f"❌ 예상된 JSON 구조가 아님: {parsed_response}")
+                return {"error": "LLM 응답이 예상된 구조가 아님"}
 
             return parsed_response
 
         except Exception as e:
             logger.error(f"❌ summarize_features 오류: {e}")
             return {"error": "추천 생성 중 오류 발생"}
+
+    
+
+
 
 
 
