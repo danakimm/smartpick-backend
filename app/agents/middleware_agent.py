@@ -1,123 +1,129 @@
 import asyncio
-import logging
+import os
 import json
-from typing import Dict, Any, List, Optional
-from app.utils.logger import logger
+import logging
+from typing import Dict, Any, List
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
-# 에이전트 모듈 임포트 (실제 구현 필요)
-from spec_agent import SpecRecommender
-from review_agent import ReviewRecommender
-
-# 로깅 설정
 logger = logging.getLogger("smartpick.agents.middleware_agent")
+load_dotenv()
 
-class BaseAgent:
-    async def run(self, state: Dict[str, Any]):
-        raise NotImplementedError("run method must be implemented")
+class MiddlewareAgent:
+    def __init__(self, spec_agent, review_agent):#, youtube_agent):
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key)
 
-class MiddlewareAgent(BaseAgent):
-    """
-    run 입력 포멧 dict
-    {"middleware": {"query" : "유저 요청 사항",                                     <- str
-            "product name" : "제품명",                                            <- srt
-            "question" : ["질문에이전트 결과 리스트에 감싸서 입력"],                <- 길이 1 List 안에 dict
-            "youtube" : ["유튜브 에이전트 결과 리스트에 감싸서 입력"],               <- 길이 1 List 안에 dict
-            "review" : ["리뷰 에이전트 결과 리스트에 감싸서 입력"],                 <- 길이 1 List 안에 dict
-            "specification" : ["제품 정보 분석 에이전트 결과 리스트에 감싸서 입력"],  <- 길이 1 List 안에 dict
+        # ✅ Initialize agents
+        self.spec_agent = spec_agent
+        self.review_agent = review_agent
+        #self.youtube_agent = youtube_agent
+
+    async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        MiddlewareAgent receives state from parallel_analysis, generates top 3 recommended products,
+        then fetches product details from Spec, Review, and YouTube Agents.
+        """
+        logger.debug(f"MiddlewareAgent 실행: {state}")
+        print("🔎 MiddlewareAgent 시작...")
+
+        # 1️⃣ Get parallel analysis results (fallback to empty dict if missing)
+        review_results = state.get("review_results", {})
+        spec_results = state.get("spec_results", {})
+        youtube_results = state.get("youtube_results", {})
+
+        # 2️⃣ Generate final recommendations using LLM
+        final_recommendation = await self.generate_final_recommendation(review_results, spec_results, youtube_results)
+
+        if "error" in final_recommendation:
+            return final_recommendation  # 🚨 If LLM fails, return error.
+
+        # 3️⃣ Fetch detailed information for the recommended products
+        detailed_product_info = await self.fetch_product_details(final_recommendation["최종 추천 제품"], state, youtube_results)
+
+        return {"middleware": detailed_product_info} if detailed_product_info else {"error": "추천 제품 정보를 가져오는 중 오류 발생"}
+
+    async def generate_final_recommendation(self, review_data, spec_data, youtube_data):
+        """
+        Uses LLM to generate the top 3 recommended products.
+        """
+        print("🧠 LLM을 활용한 최종 제품 추천 생성...")
+        print(review_data, spec_data, youtube_data)
+
+        try:
+            # 3️⃣ Safe input handling (use defaults if data is missing)
+            llm_input = {
+                "사용자 리뷰 분석": [],#review_data.get("recommendations", ["리뷰 데이터 없음"]),
+                "제품 스펙 추천": spec_data.get("추천 제품", ["스펙 데이터 없음"]),
+                "유튜브 리뷰 분석": []#youtube_data.get("reviews", ["유튜브 리뷰 데이터 없음"])
             }
-        }
-    """
-    
-    
-    def __init__(self):
-        self.spec_agent = SpecRecommender()
-        self.review_agent = ReviewRecommender()
 
-    async def gather_recommendations(self, state: Dict[str, Any]) -> Dict[str, List]:
-        """ 스펙 및 리뷰 에이전트에서 추천 제품 리스트를 수집 """
-        spec_input = state.get("spec_agent_state", {}).get("spec_analysis", {})
-        review_input = state["review_agent_state"]["review_analysis"]
-
-        spec_future = self.spec_agent.run(spec_input)
-        review_future = self.review_agent.run(review_input)
-
-        spec_result, review_result = await asyncio.gather(
-            spec_future, review_future
-        )
-
-        return {
-            "spec": spec_result.get("추천 제품", []),
-            "review": review_result.get("추천 제품", []),
-        }
-
-    def compute_final_scores(self, recommendations: Dict[str, List], spec_input: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """ 가중치를 적용하여 최종 제품을 선정 """
-        product_scores = {}
-        
-        # 기본 가중치 설정
-        spec_weight = 0.7
-        review_weight = 0.3
-        
-        # 스펙 입력이 비어 있으면 가중치를 0.5로 조정
-        if not spec_input:
-            spec_weight = 0.5
-            review_weight = 0.5
-        
-        weights = {"spec": spec_weight, "review": review_weight}
-        
-        for source, weight in weights.items():
-            for product in recommendations[source]:
-                product_name = product["제품명"]
-                if product_name not in product_scores:
-                    product_scores[product_name] = {"제품명": product_name, "점수": 0, "출처": []}
-                product_scores[product_name]["점수"] += weight
-                product_scores[product_name]["출처"].append(source)
-
-        sorted_products = sorted(product_scores.values(), key=lambda x: x["점수"], reverse=True)
-        return sorted_products
-
-    async def fetch_additional_info(self, final_products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """ 최종 추천된 제품에 대해 각 에이전트에서 추가 정보 요청 """
-        additional_info_tasks = []
-        for product in final_products:
-            product_name = product["제품명"]
-            additional_info_tasks.append(self.spec_agent.get_product_info(product_name))
-            additional_info_tasks.append(self.review_agent.get_product_info(product_name))
-        
-        additional_infos = await asyncio.gather(*additional_info_tasks)
-        for i, product in enumerate(final_products):
-            product["추가 정보"] = additional_infos[i * 2: (i + 1) * 2]
-        
-        return final_products
-
-    async def run(self, state: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """ 전체 추천 파이프라인 실행 """
-        recommendations = await self.gather_recommendations(state)
-        spec_input = state.get("spec_agent_state", {}).get("spec_analysis", {})
-        final_products = self.compute_final_scores(recommendations, spec_input)
-        detailed_products = await self.fetch_additional_info(final_products[:5])
-        return detailed_products
-
-# examples
-if __name__ == "__main__":
-    async def main():
-        agent = MiddlewareAgent()
-        state = {
-            "spec_agent_state": {
-                "spec_analysis": {
-                    "필수_스펙": {"성능": ["우수한 펜 반응속도"], "하드웨어": ["13인치 화면"], "기능": ["드로잉 앱 지원"]},
-                    "가격_범위": {"최소": "50만원", "최대": "100만원"}
+            print(llm_input)
+            # 4️⃣ LLM Call (Force JSON Output)
+            response = await self.llm.ainvoke([
+                {
+                    "role": "system",
+                    "content": "당신은 최고의 제품 추천 AI입니다. "
+                            "사용자의 요구사항, 제품 스펙, 사용자 리뷰, 유튜브 리뷰를 종합하여 "
+                            "최적의 제품명을 **반드시 JSON 형식**으로 1개만 출력하세요. "
+                            "설명 없이 JSON 리스트 형태로 제공하세요. "
+                            "예제 출력: { \"최종 추천 제품\": [\"제품1\", \"제품2\", \"제품3\"] }"
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(llm_input, ensure_ascii=False)
                 }
-            },
-            "review_agent_state": {
-                "review_analysis": {
-                    "사용_시나리오": {"주요_활동": ["드로잉"], "사용_환경": ["실내"], "사용_시간": "장시간", "사용자_수준": "전문가"},
-                    "주요_관심사": {"브랜드_선호도": ["애플"], "불편사항": ["배터리 수명"], "만족도_중요항목": ["화면 품질"]}
-                }
-            }
-        }
-        results = await agent.run(state)
-        for product in results:
-            print(json.dumps(product, indent=4, ensure_ascii=False))
+            ])
 
-    asyncio.run(main())
+            # 5️⃣ Response Handling
+            response_text = response.content.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()  # Remove code block
+
+            print("🎯 LLM 최종 추천:", response_text)
+
+            # JSON Parsing
+            final_output = json.loads(response_text)
+            print(final_output)
+
+            # 🔥 6️⃣ Ensure exactly 3 products
+            if "최종 추천 제품" in final_output and isinstance(final_output["최종 추천 제품"], list):
+                final_output["최종 추천 제품"] = final_output["최종 추천 제품"][:1]  # Limit to 3
+            else:
+                raise ValueError("LLM이 잘못된 형식의 출력을 생성했습니다.")
+
+            return final_output
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
+            return {"error": "최종 추천을 생성하는 중 오류 발생"}
+
+    async def fetch_product_details(self, recommended_products: List[str], state : Dict[str, Any], youtube_results : Dict[str, Any]):
+        """
+        Extracts detailed information (price, pros/cons, specifications) for each recommended product.
+        """
+        # 3개면 for문 돌려야 하고 1개면 그냥 이대로 
+        # product_details = {}
+
+        #for product in recommended_products:
+        query = (state or {}).get("question_info", {}).get("query", "질문 정보 없음")
+        print(query)
+        #query = state.get("question_info", {}).get("query", "질문 정보 없음")
+        spec_info = await self.spec_agent.get_product_details(recommended_products[0])
+        review_info = []#await self.review_agent.get_product_details(recommended_products[0])
+        youtube_info = []#youtube_results
+
+        product_details = {
+
+            "query" : query, #유저 요청 사항#,
+            "product name" : recommended_products[0], # 제품명
+            "question": [state],   # 질문 에이전트
+            "youtube": [youtube_info],  # 유튜브 에이전트
+            "review": [review_info], # 리뷰 에이전트
+            "specification" : [spec_info] # 특성 에이전트 + 가격, 별점, 링크
+        
+        }
+
+        print(product_details)
+
+        return product_details  
