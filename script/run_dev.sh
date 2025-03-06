@@ -14,7 +14,6 @@ echo "도커 컨테이너 실행 중..."
 docker run -d \
   --name smartpick-dev \
   --restart unless-stopped \
-  --network host \
   -p 8000:8000 \
   -v "$(pwd)":/app \
   --env-file .env \

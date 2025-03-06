@@ -41,7 +41,7 @@ class SpecRecommender(BaseAgent):
 
         context = []
         for _, row in df.iterrows():
-            product_name = row["name"]
+            product_name = row["rename"]
             features_text = row.get("features_규격", "")
             product_price = self.extract_price(features_text)
             
@@ -186,16 +186,9 @@ class SpecRecommender(BaseAgent):
                 response_text = response_text[7:-3].strip()
 
             product_summary = json.loads(response_text)
-
+            print(product_summary)
             # 응답 데이터 확인
-            # if "추천 이유" not in product_summary:
-                #logger.error(f"❌ '추천 이유'가 LLM 응답에 없음: {product_summary}")
-                #product_summary["추천 이유"] = {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]}
-
-            # if "핵심 사항" not in product_summary:
-                #logger.error(f"❌ '핵심 사항'이 LLM 응답에 없음: {product_summary}")
-                #product_summary["핵심 사항"] = []
-
+           
             # LLM 응답에 설명이 없으면 보완
             updated_core_specs = []
             for spec in core_specs:
@@ -239,7 +232,7 @@ class SpecRecommender(BaseAgent):
 
         df = pd.read_excel(self.purchase_info)
         df_final = df[df["product_name"] == product_name].reset_index(drop=True)
-
+        print(df_final)
         purchase_details = {"store":[]}
         for _, row in df_final.iterrows() :
             purchase_details["store"].append({

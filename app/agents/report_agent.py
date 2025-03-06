@@ -8,7 +8,7 @@ from typing import Dict, Any
 from abc import ABC, abstractmethod
 import threading
 from concurrent.futures import ThreadPoolExecutor
-
+from app.utils.logger import logger
 class ReportAgent(BaseAgent):
     def __init__(self,name="report_agent"):
         self.name=name
@@ -25,7 +25,8 @@ class ReportAgent(BaseAgent):
         self.last_report=None
         
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        data=state["middleware"]
+        logger.debug(f"input key name check!!!!:{state[0].keys()}")
+        data=state["middleware"][0]
         youtube_input=data["youtube"]
         query=youtube_input["youtube"]["query"]
         review_input=data["review"]
