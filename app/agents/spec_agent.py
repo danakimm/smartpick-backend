@@ -118,13 +118,15 @@ class SpecRecommender(BaseAgent):
         match = re.search(r"출시가:\s*([\d,]+)원", str(features_text))
         return int(match.group(1).replace(",", "")) if match else None
     
-    
+
     async def get_product_details(self, product_name: str) -> dict:
         """
         Returns detailed specifications and price of the given product.
         """ 
         df = pd.read_csv("C:/Users/hu612/Documents/Github/smartpick-backend/app/agents/documents/product_details.csv")
         product_row = df[df["name"] == product_name]
+
+        print(f"🔍 검색된 제품명: {product_name}, 결과: {product_row}")
 
         if product_row.empty:
             return {
@@ -137,11 +139,16 @@ class SpecRecommender(BaseAgent):
         product_data = product_row.iloc[0]
         price = product_data.get("price", "정보 없음")
 
-        # Extract key specifications
-        core_specs = [
-            {"항목": key.replace("features_", ""), "사양": value, "설명": "사양 설명"}
-            for key, value in product_data.items() if key.startswith("features_") and pd.notna(value)
-        ]
+        # 핵심 사항 리스트 추출 및 데이터 검증
+        core_specs = []
+        for key, value in product_data.items():
+            if key.startswith("features_") and pd.notna(value):
+                항목 = key.replace("features_", "")
+                사양 = value
+                설명 = "LLM이 해당 사양을 기반으로 설명을 생성합니다."
+                core_specs.append({"항목": 항목, "사양": 사양, "설명": 설명})
+
+        print(f"🔍 핵심 사항 확인: {core_specs}")
 
         # LLM 호출하여 장점 & 단점 생성
         return await self.fetch_product_analysis(product_name, price, core_specs)
@@ -151,11 +158,18 @@ class SpecRecommender(BaseAgent):
         Calls LLM to generate product pros/cons and returns full product details.
         """
         try:
+            # LLM 호출
             response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
                 {
                     "role": "system",
                     "content": """
-                    당신은 제품 추천 AI입니다. 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
+                    당신은 제품 추천 AI입니다. 사용자의 요구 사항과 제품 정보를 분석하여, 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
+                    또한, '핵심 사항'에 대해 '항목'과 '사양'을 참고하여 반드시 각 사양에 대한 구체적인 '설명'을 생성하세요.
+                    예를 들어:
+                    - '카메라' 사양이 주어지면, 카메라의 해상도, 영상 촬영 가능 여부, 조도 환경에서의 성능 등을 분석하여 설명하세요.
+                    - '배터리' 사양이 주어지면, 대기 시간, 고속 충전 지원 여부 등을 포함하세요.
+                    - '화면' 사양이 주어지면, 디스플레이 기술, 주사율, 색상 표현력 등을 포함하세요.
+                    설명이 부족하면 상세한 정보를 기반으로 의미 있는 문장을 작성하세요.
                     """
                 },
                 {
@@ -169,16 +183,42 @@ class SpecRecommender(BaseAgent):
             ])
 
             response_text = response.content.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()  # 코드 블록 제거
+            print(f"🔍 LLM 응답 원본: {response_text}")
 
-            logger.debug(f"LLM 응답: {response_text}")
+            # JSON 응답 코드 블록 제거
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()  
+
             product_summary = json.loads(response_text)
+
+            # 응답 데이터 확인
+            if "추천 이유" not in product_summary:
+                logger.error(f"❌ '추천 이유'가 LLM 응답에 없음: {product_summary}")
+                product_summary["추천 이유"] = {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]}
+
+            if "핵심 사항" not in product_summary:
+                logger.error(f"❌ '핵심 사항'이 LLM 응답에 없음: {product_summary}")
+                product_summary["핵심 사항"] = []
+
+            # LLM 응답에 설명이 없으면 보완
+            updated_core_specs = []
+            for spec in core_specs:
+                llm_spec = next((s for s in product_summary["핵심 사항"] if s["항목"] == spec["항목"]), None)
+
+                # 설명이 없는 경우 템플릿 설명 추가
+                설명 = llm_spec["설명"] if llm_spec and "설명" in llm_spec else self.generate_fallback_description(spec["항목"], spec["사양"])
+
+                updated_core_specs.append({
+                    "항목": spec["항목"],
+                    "사양": spec["사양"],
+                    "설명": 설명
+                })
+
+            # 최종 정제된 제품 정보 반환
             specifications = {
-                            "제품명": product_name,
-                            "가격": price,
-                            "추천 이유": product_summary.get("추천 이유", {"pros": [], "cons": []}),
-                            "핵심 사항": core_specs}
+                "추천 이유": product_summary["추천 이유"],
+                "핵심 사항": updated_core_specs
+            }
 
             return {
                 "specifications": specifications,
@@ -194,7 +234,7 @@ class SpecRecommender(BaseAgent):
                 "핵심 사항": core_specs
             }
 
-    
+        
     
     def purchase_inform(self, product_name):
         """
