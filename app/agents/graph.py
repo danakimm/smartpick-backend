@@ -6,11 +6,10 @@ from app.utils.logger import logger
 
 class AgentState(TypedDict):
     question: str
-    sub_questions: list[str]
     review_agent_state: dict  # review_agent 상태 정보
     spec_agent_state: dict  # spec_agent 상태 정보
     youtube_agent_state: dict  # youtube_agent 상태 정보
-    youtube_results: dict
+    youtube_results: dict 
     review_results: dict
     spec_results: dict
     middleware_results: dict
@@ -42,27 +41,44 @@ def define_workflow():
     workflow = Graph()
 
     async def parallel_analysis(state: AgentState) -> Dict:
-        # 병렬로 실행하기 위해 asyncio.gather 사용
-        youtube_results, review_results, spec_results = await asyncio.gather(
-            # Review 분석 실행
-            youtube_agent.run(state["youtube_agent_state"]["youtube_analysis"]),
-            review_agent.run(state["review_agent_state"]["review_analysis"]),
-            spec_agent.run(state["spec_agent_state"]["spec_analysis"]),
-        )
-        
-        logger.debug(f"Review results: {review_results}")  # 로깅 추가
-        logger.debug(f"Spec results: {spec_results}")
-        
-        results = {
-            "youtube_results": youtube_results or {},
-            "review_results": review_results or {},
-            "spec_results": spec_results or {},
-        }
-        logger.debug(f"Parallel analysis results: {results}")  # 로깅 추가
-        return results
+        try:
+            # 병렬로 실행하기 위해 asyncio.gather 사용
+            youtube_results, review_results, spec_results = await asyncio.gather(
+                # Review 분석 실행
+                youtube_agent.run(state["youtube_agent_state"]['youtube_analysis']),
+                review_agent.run(state["review_agent_state"]['review_analysis']),
+                spec_agent.run(state["spec_agent_state"]['spec_analysis']),
+                return_exceptions=True
+            )
+
+            results = {
+                "youtube_results": {} if isinstance(youtube_results, Exception) else youtube_results,
+                "review_results": {} if isinstance(review_results, Exception) else review_results,
+                "spec_results": {} if isinstance(spec_results, Exception) else spec_results,
+            }
+            
+            logger.debug(f"Parallel analysis results: {results}")  # 로깅 추가
+            return results
+        except Exception as e:
+            logger.error(f"Error in parallel analysis: {e}")
+            return {"error": "병렬 분석 중 오류 발생"}
 
     async def middleware_processing(state: AgentState) -> Dict:
-        return await middleware_agent.run(state)
+        try:
+            # middleware에 필요한 정보만 전달
+            middleware_input = {
+                "question": state["question"],
+                "youtube_results": state["youtube_results"],
+                "review_results": state["review_results"],
+                "spec_results": state["spec_results"]
+            }
+            
+            result = await middleware_agent.run(middleware_input)
+            return {"middleware_results": result}
+            
+        except Exception as e:
+            logger.error(f"Error in middleware processing: {e}")
+            return {"error": "미들웨어 처리 중 오류 발생"}
 
     async def report_generation(state: AgentState) -> Dict:
         logger.debug(f"Report input state: {state}")  # 입력 상태 로깅
@@ -94,21 +110,30 @@ def define_workflow():
         feedback_type = feedback_result["feedback_type"]
 
         if feedback_type == "refinement":
-            # 기존 분석 결과와 새로운 요구사항으로 재분석 실행
-            new_state = {
-                **state,
-                "question": feedback_result["refined_requirements"],
-                "feedback_type": feedback_type,  # feedback_type 추가
-                "refined_requirements": feedback_result["refined_requirements"]  # refined_requirements 추가
-            }
-            result = await parallel_analysis(new_state)
-            result["feedback_type"] = feedback_type  # 결과에도 feedback_type 추가
-            return result
+            # 기존 요구사항과 새로운 요구사항을 결합
+            combined_requirements = f"""
+            기존 요구사항: {state['question']}
+            추가/수정된 요구사항: {feedback_result['refined_requirements']}
+            """
+
+            new_agent_states = await question_agent._prepare_agent_states(combined_requirements)
+
+            return {
+                "question": combined_requirements,
+                "feedback_type": feedback_type,
+                "refined_requirements": feedback_result["refined_requirements"],
+                "feedback": "",
+                "feedback_response": "",
+                "youtube_agent_state": new_agent_states["youtube_agent_state"],
+                "review_agent_state": new_agent_states["review_agent_state"],
+                "spec_agent_state": new_agent_states["spec_agent_state"]
+            }  # parallel_analysis는 conditional edge를 통해 실행
         else:
-            # 단순 질문에 대한 직접 응답
+            # 단순 질문 처리
             return {
                 "feedback_response": feedback_result["response"],
-                "feedback_type": feedback_type  # feedback_type 추가
+                "feedback_type": feedback_type,
+                "feedback": "",  # 처리된 피드백 초기화
             }
 
     # 노드 추가
@@ -138,7 +163,7 @@ def define_workflow():
         path=lambda x: x["feedback_type"] == "refinement",
         path_map={
             True: "parallel_analysis",  # 재분석 필요시
-            False: "report_generation"  # 단순 질문시
+            False: "handle_feedback"  # 단순 질문시
         }
     )
 
