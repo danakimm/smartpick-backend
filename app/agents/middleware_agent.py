@@ -117,5 +117,4 @@ class MiddlewareAgent:
             "specification": [spec_info]
         }
 
-        print(product_details)
         return product_details  
