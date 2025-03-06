@@ -64,7 +64,7 @@ class SpecRecommender(BaseAgent):
     import json
     import re
     import logging
-    from openai import ChatOpenAI
+    #from openai import ChatOpenAI
 
     logger = logging.getLogger(__name__)
 
