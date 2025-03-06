@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import tiktoken
-from dotenv import load_dotenv
 import json
 import time
 
@@ -381,7 +380,6 @@ class keyword_finder:
         return query
 class Keyword_filter():
     def __init__(self):
-        load_dotenv()
         self.dataloader=DataLoader()
         keywordset=list(self.dataloader.DataProcessor.keyword_set)
         self.keywordset="["+"], [".join(list( keywordset))+"]"
