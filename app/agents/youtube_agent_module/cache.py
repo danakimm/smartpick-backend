@@ -1,0 +1,869 @@
+from konlpy.tag import Okt
+import h5py
+import json
+import os
+import numpy as np
+from collections import defaultdict
+import hashlib
+from konlpy.tag import Okt
+from app.agents.report_agent_module.bsae_reporter import CacheManager
+class KeywordExtractor:
+    """
+    텍스트에서 키워드를 추출하고 분류하는 클래스
+    """
+    def __init__(self):
+        self.okt = Okt()
+        # 기능(Features) 키워드
+        self.features = [
+            "성능", "배터리", "화면", "무게", "휴대성", "저장용량", "속도", "램", "칩셋", "화질",
+            "해상도", "주사율", "발열", "멀티태스킹", "충전", "키보드", "카메라", "스피커", "음질", "밝기",
+            "디자인", "내구성", "방수"
+        ]
+
+        # 사용 용도(Usage) 키워드
+        self.usage = [
+            "공부", "필기", "그림", "영상", "영화", "게임", "웹서핑", "독서", "전자책", "웹툰","드로잉",
+            "애니메이션", "프로그래밍", "인터넷",
+            "인강", "유튜브", "넷플릭스", "OTT", "카카오톡", "문서", "어린이", "영상통화", "학습", "노트북"
+        ]
+
+        # 브랜드/플랫폼(Brands/Platform) 키워드
+        self.brands = [
+            "아이패드", "갤럭시탭", "애플", "삼성", "레노버", "샤오미", "화웨이", "LG", "서피스",
+            "안드로이드", "iOS"
+        ]
+
+        # 기타(Others) 키워드
+        self.others = [
+            "가성비", "가격", "S펜", "애플펜슬", "생태계", "연동", "호환성", "업데이트",
+            "AS", "Wi-Fi", "LTE", "SD카드", "USB-C", "필압", "필기감", "인치", "크기", "메모리", "렉", "터치"
+        ]
+
+        # 위 네 리스트를 합쳐 총 80개(중복 검사 필요)
+        self.keywords_top80 = self.features + self.usage + self.brands + self.others
+
+        # Tier별 키워드 (중요도/빈도 순으로 구성했다고 가정)
+        self.keywords_top20 = [
+            "성능", "배터리", "화면", "가격", "가성비", "무게", "휴대성", "저장용량",
+            "공부", "필기", "그림", "영상", "게임", "아이패드", "갤럭시탭", "삼성",
+            "애플", "영화", "유튜브", "펜"
+        ]
+
+        # Top 40 = Top 20 + 추가 20
+        self.keywords_top40 = self.keywords_top20 + [
+            "화질", "해상도", "주사율", "램", "칩셋", "발열", "멀티태스킹", "충전",
+            "키보드", "디스플레이", "디자인", "S펜", "애플펜슬", "레노버", "샤오미",
+            "서피스", "안드로이드", "iOS", "넷플릭스", "인강"
+        ]
+
+        # Top 80 = Top 40 + 추가 40
+        self.keywords_top80 = self.keywords_top40 + [
+            "화웨이", "LG", "웹서핑", "독서", "전자책", "웹툰", "카카오톡", "내구성",
+            "연동", "SD카드", "USB-C", "스피커", "생태계", "속도", "밝기", "호환성",
+            "업데이트", "노트북", "LTE", "OTT", "카메라", "인치", "AMOLED", "IPS",
+            "크기", "메모리", "음질", "렉", "터치", "필압", "이북", "AS", "Wi-Fi",
+            "방수", "필기감", "강의", "어린이", "문서", "학습", "영상통화"
+        ]
+
+        # (참고) 카테고리별로도 정리해두면 추후 확장성↑
+        self.keywords_by_category = {
+            "features": self.features,
+            "usage": self.usage,
+            "brands": self.brands,
+            "others": self.others
+        }
+    
+    def extract_keywords(self, text):
+        """
+        텍스트에서 키워드 추출
+        
+        Args:
+            text (str): 키워드를 추출할 텍스트
+            
+        Returns:
+            list: 추출된 키워드 목록
+        """
+        tokens = self.okt.pos(text, stem=True)
+        keywords = [word for word, pos in tokens if pos in ('Noun', 'Verb', 'Adjective')]
+        return keywords
+    
+    def match_category(self, text_or_keywords):
+        """
+        텍스트나 키워드 목록을 카테고리별로 매칭
+        
+        Args:
+            text_or_keywords (str or list): 텍스트 또는 키워드 목록
+            
+        Returns:
+            dict: 카테고리별 키워드 목록
+        """
+        # 입력이 문자열인 경우 키워드 추출
+        if isinstance(text_or_keywords, str):
+            keywords = self.extract_keywords(text_or_keywords)
+        else:
+            keywords = text_or_keywords
+            
+        category = {
+            "features": [],
+            "usage": [],
+            "brands": [],
+            "others": []
+        }
+        
+        for kw in keywords:
+            if kw in self.features:
+                category["features"].append(kw)
+            elif kw in self.usage:
+                category["usage"].append(kw)
+            elif kw in self.brands:
+                category["brands"].append(kw)
+            elif kw in self.others:
+                category["others"].append(kw)
+                
+        return category
+    
+    def match_tier(self, keywords):
+        """
+        키워드를 티어별로 매칭
+        
+        Args:
+            keywords (list): 매칭할 키워드 목록
+            
+        Returns:
+            dict: 티어별 키워드 목록
+        """
+        tier = {}
+        keywords_top80_row = []
+        
+        for kw in keywords:
+            if kw in self.keywords_top80:
+                keywords_top80_row.append(kw)
+                
+        tier["top80"] = keywords_top80_row.copy()
+        
+        # Top40에 없는 키워드 제거
+        iterser = list(set(self.keywords_top80) - set(self.keywords_top40))
+        keywords_top40_row = keywords_top80_row.copy()
+        for kw in iterser:
+            if kw in keywords_top40_row:
+                keywords_top40_row.remove(kw)
+                
+        tier["top40"] = keywords_top40_row.copy()
+        
+        # Top20에 없는 키워드 제거
+        iterser = list(set(self.keywords_top40) - set(self.keywords_top20))
+        keywords_top20_row = keywords_top40_row.copy()
+        for kw in iterser:
+            if kw in keywords_top20_row:
+                keywords_top20_row.remove(kw)
+                
+        tier["top20"] = keywords_top20_row.copy()
+        return tier
+    
+    def get_keyword_weight(self, keyword):
+        """
+        키워드의 가중치 반환 (카테고리 기반 + 티어 기반)
+        
+        Args:
+            keyword (str): 가중치를 계산할 키워드
+            
+        Returns:
+            int: 키워드 가중치
+        """
+        weight = 0
+        
+        # 카테고리 기반 가중치 (모든 카테고리에 동일한 가중치 3 적용)
+        if (keyword in self.features or keyword in self.usage or 
+            keyword in self.brands or keyword in self.others):
+            weight += 3
+        
+        # 티어 기반 가중치 (기존대로 유지)
+        if keyword in self.keywords_top20:
+            weight += 3
+        elif keyword in self.keywords_top40:
+            weight += 2
+        elif keyword in self.keywords_top80:
+            weight += 1
+        
+        return max(weight, 1)  # 최소 가중치는 1 (어떤 카테고리에도 속하지 않는 키워드)
+    
+    def print_keyword_info(self):
+        """키워드 정보 출력"""
+        print("===== Top 20 키워드 =====")
+        print(self.keywords_top20)
+        print("\n===== Top 40 키워드 =====")
+        print(self.keywords_top40)
+        print("\n===== Top 80 키워드 =====")
+        print(self.keywords_top80)
+        print("\n===== 카테고리별 키워드 =====")
+        for category, kw_list in self.keywords_by_category.items():
+            print(f"[{category}] : {kw_list}")
+
+class IndexStorage:
+    """
+    H5 파일을 사용한 역인덱스 저장소
+    """
+    def __init__(self, file_path):
+        """
+        파일 경로를 입력받아 초기화하고, 파일이 없으면 생성함
+        
+        Args:
+            file_path (str): HDF5 파일의 경로 (확장자 포함)
+        """
+        self.file_path = file_path
+        
+        # 확장자가 h5인지 확인
+        if not file_path.endswith('.h5'):
+            raise ValueError("파일 확장자는 반드시 .h5여야 합니다.")
+            
+        # 파일 열기 또는 생성
+        self._open_file()
+        
+        # 기본 그룹 생성 확인
+        self._ensure_groups()
+    
+    def _open_file(self, mode='a'):
+        """파일을 지정된 모드로 열기"""
+        if os.path.exists(self.file_path):
+            self.file = h5py.File(self.file_path, mode)
+        else:
+            self.file = h5py.File(self.file_path, 'w')
+    
+    def _ensure_groups(self):
+        """기본 그룹 존재 확인 및 생성"""
+        if 'queries' not in self.file:
+            self.file.create_group('queries')
+        if 'keywords' not in self.file:
+            self.file.create_group('keywords')
+    
+    def close(self):
+        """H5 파일 닫기"""
+        if hasattr(self, 'file') and self.file:
+            self.file.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+    
+    def _encode_keyword(self, keyword):
+        """키워드를 안전한 형식으로 인코딩"""
+        return keyword.encode('utf-8').hex()
+    
+    def _decode_keyword(self, encoded):
+        """인코딩된 키워드를 원래 형식으로 복원"""
+        return bytes.fromhex(encoded).decode('utf-8')
+    
+    def add_query(self, query_id, query_data):
+        """
+        쿼리 정보 저장
+        
+        Args:
+            query_id (str): 쿼리 ID
+            query_data (dict): 저장할 쿼리 데이터
+                {
+                    'query_text': str,
+                    'keywords': list,
+                    'category': dict,
+                    'tier': dict,
+                    ...
+                }
+        
+        Returns:
+            bool: 성공 여부
+        """
+        query_id = str(query_id)
+        
+        # 기존 쿼리 삭제 (덮어쓰기)
+        if query_id in self.file['queries']:
+            del self.file['queries'][query_id]
+            
+        # 쿼리 그룹 생성
+        query_group = self.file['queries'].create_group(query_id)
+        
+        # 쿼리 정보 저장
+        for key, value in query_data.items():
+            if isinstance(value, (str, int, float, bool)):
+                query_group.attrs[key] = value
+            else:
+                # 복잡한 구조는 JSON으로 저장
+                query_group.attrs[f"{key}_json"] = json.dumps(value)
+        
+        self.file.flush()
+        return True
+    def open_if_closed(self, mode='a'):
+        """파일이 닫혔다면 다시 여는 메서드"""
+        # self.file이 존재하지 않거나, 닫힌 경우 재오픈
+        if not hasattr(self, 'file') or self.file is None or self.file.id.valid!=1:
+            self._open_file(mode)
+    
+    def add_keyword_to_index(self, keyword, query_id):
+        self.open_if_closed()
+        """
+        역인덱스에 키워드-쿼리 연결 추가
+        
+        Args:
+            keyword (str): 키워드
+            query_id (str): 쿼리 ID
+            
+        Returns:
+            bool: 성공 여부
+        """
+        if not keyword:
+            return False
+            
+        query_id = str(query_id)
+        encoded_key = self._encode_keyword(keyword)
+        
+        # 키워드 데이터셋이 없으면 생성
+        if encoded_key not in self.file['keywords']:
+            keyword_dataset = self.file['keywords'].create_dataset(
+                encoded_key,
+                data=np.array([query_id], dtype='S100'),
+                maxshape=(None,),
+                chunks=True
+            )
+            keyword_dataset.attrs['keyword'] = keyword
+        else:
+            # 이미 있으면 쿼리 ID 추가 (중복 방지)
+            dataset = self.file['keywords'][encoded_key]
+            existing_ids = [qid.decode('utf-8') for qid in dataset[:]]
+            
+            if query_id not in existing_ids:
+                existing_ids.append(query_id)
+                dataset.resize((len(existing_ids),))
+                dataset[:] = np.array(existing_ids, dtype='S100')
+        
+        self.file.flush()
+        return True
+    
+    def get_queries_by_keyword(self, keyword):
+        self.open_if_closed()
+        """
+        키워드로 연결된 쿼리 ID 목록 가져오기
+        
+        Args:
+            keyword (str): 검색할 키워드
+            
+        Returns:
+            list: 쿼리 ID 목록
+        """
+        encoded_key = self._encode_keyword(keyword)
+        
+        if encoded_key not in self.file['keywords']:
+            return []
+            
+        dataset = self.file['keywords'][encoded_key]
+        return [qid.decode('utf-8') for qid in dataset[:]]
+    
+    def get_query_info(self, query_id):
+        """
+        쿼리 ID로 쿼리 정보 가져오기
+        
+        Args:
+            query_id (str): 쿼리 ID
+            
+        Returns:
+            dict: 쿼리 정보 또는 None
+        """
+        query_id = str(query_id)
+        
+        if query_id not in self.file['queries']:
+            return None
+            
+        query_group = self.file['queries'][query_id]
+        query_info = {'query_id': query_id}
+        
+        # 속성 정보 수집
+        for attr_name, attr_value in query_group.attrs.items():
+            if attr_name.endswith('_json'):
+                # JSON 문자열 파싱
+                key = attr_name[:-5]  # '_json' 제거
+                query_info[key] = json.loads(attr_value)
+            else:
+                query_info[attr_name] = attr_value
+                
+        return query_info
+    
+    def get_all_queries(self):
+        """저장된 모든 쿼리 ID 목록 반환"""
+        return list(self.file['queries'].keys())
+    
+    def get_all_keywords(self):
+        """인덱싱된 모든 키워드 목록 반환"""
+        keywords = []
+        for encoded_key in self.file['keywords']:
+            dataset = self.file['keywords'][encoded_key]
+            if 'keyword' in dataset.attrs:
+                keywords.append(dataset.attrs['keyword'])
+        return keywords
+
+class QueryMatcher:
+    """
+    키워드 기반 쿼리 매칭 알고리즘 클래스
+    """
+    def __init__(self, keyword_extractor, index_storage):
+        """
+        초기화
+        
+        Args:
+            keyword_extractor (KeywordExtractor): 키워드 추출 객체
+            index_storage (IndexStorage): 인덱스 저장소 객체
+        """
+        self.keyword_extractor = keyword_extractor
+        self.index_storage = index_storage
+    
+    def find_matching_queries(self, text_or_keywords, min_score=0.5, max_results=3):
+        """
+        텍스트 또는 키워드 목록으로 매칭되는 쿼리 검색
+        
+        Args:
+            text_or_keywords (str or list): 검색할 텍스트 또는 키워드 목록
+            min_score (float): 최소 매치 점수 (0.0 ~ 1.0)
+            max_results (int): 반환할 최대 결과 수
+            
+        Returns:
+            list: 매치된 쿼리 정보 목록 (매치 점수로 정렬됨)
+        """
+        # 입력이 문자열인 경우 키워드 추출
+        if isinstance(text_or_keywords, list):
+            text_or_keywords=text_or_keywords[0]
+        
+        if isinstance(text_or_keywords, str):
+            keywords = self.keyword_extractor.extract_keywords(text_or_keywords)
+        else:
+            keywords = text_or_keywords
+            
+        if not keywords:
+            return []
+            
+        # 키워드별 매칭 쿼리 검색
+        query_matches = defaultdict(int)
+        keywords_set = set(keywords)  # 중복 제거
+        
+        # 총 가중치 계산
+        total_weight = sum(self.keyword_extractor.get_keyword_weight(kw) for kw in keywords_set)
+        
+        # 각 키워드에 대한 역인덱스 검색
+        for keyword in keywords_set:
+            # 키워드 가중치 계산
+            weight = self.keyword_extractor.get_keyword_weight(keyword)
+            
+            # 키워드에 매칭되는 쿼리 검색
+            query_ids = self.index_storage.get_queries_by_keyword(keyword)
+            
+            # 매칭 점수 누적
+            for query_id in query_ids:
+                query_matches[query_id] += weight
+        
+        if not query_matches:
+            return []
+            
+        # 매치 결과 정리
+        matches = []
+        for query_id, match_weight in query_matches.items():
+            match_score = match_weight / total_weight if total_weight > 0 else 0
+            
+            if match_score >= min_score:
+                query_info = self.index_storage.get_query_info(query_id)
+                if query_info:
+                    query_info['match_score'] = match_score
+                    matches.append(query_info)
+        
+        # 매치 점수로 정렬 및 결과 수 제한
+        matches.sort(key=lambda x: x['match_score'], reverse=True)
+        if len(matches) > 1:
+            top_score = matches[0]['match_score']
+            second_score = matches[1]['match_score']
+            
+            # 최고 점수가 충분히 높고(0.8 이상) 또는 두 번째 점수와의 차이가 충분히 큰 경우(0.2 이상)
+            if top_score >= 0.75 or (top_score - second_score >= 0.15):
+                return [matches[0]]  # 최고 점수만 반환
+            elif top_score < 0.6:  # 최고 점수가 충분히 높지 않고 차이도 미미하면
+                return []  # 충분히 확실하지 않으면 결과 반환하지 않음
+            # 결과가 하나만 있는 경우나, 상위 결과들이 충분히 높은 점수를 가진 경우
+        return matches[:max_results]    
+
+class KeywordQueryManager:
+    """
+    키워드 기반 쿼리 인덱싱 및 검색 통합 관리 클래스
+    """
+    def __init__(self, file_path):
+        """
+        초기화
+        
+        Args:
+            file_path (str): HDF5 파일 경로
+        """
+        self.keyword_extractor = KeywordExtractor()
+        self.index_storage = IndexStorage(file_path)
+        self.query_matcher = QueryMatcher(self.keyword_extractor, self.index_storage)
+    
+    def add_query(self, query_text, query_id=None):
+        """
+        쿼리 추가 및 키워드 인덱싱
+        
+        Args:
+            query_text (str): 쿼리 텍스트
+            query_id (str, optional): 쿼리 ID (없으면 자동 생성)
+            
+        Returns:
+            str: 생성된 쿼리 ID
+        """
+        # 쿼리 ID 생성 (제공되지 않은 경우)
+        if not query_id:
+            query_id = hashlib.sha256(query_text.encode('utf-8')).hexdigest()[:12]
+        
+        query_id = str(query_id)
+        
+        # 키워드 분석
+        keywords = self.keyword_extractor.extract_keywords(query_text)
+        category = self.keyword_extractor.match_category(keywords)
+        tier = self.keyword_extractor.match_tier(keywords)
+        
+        # 쿼리 데이터 생성
+        query_data = {
+            'query_text': query_text,
+            'keywords': keywords,
+            'category': category,
+            'tier': tier
+        }
+        
+        # 쿼리 저장
+        self.index_storage.add_query(query_id, query_data)
+        
+        # 역인덱스 업데이트
+        for keyword in set(keywords):
+            self.index_storage.add_keyword_to_index(keyword, query_id)
+        
+        return query_id
+    
+    def find_matching_queries(self, text, min_score=0.0, max_results=10):
+        """
+        텍스트와 매칭되는 쿼리 검색
+        
+        Args:
+            text (str): 검색할 텍스트
+            min_score (float): 최소 매치 점수 (0.0 ~ 1.0)
+            max_results (int): 반환할 최대 결과 수
+            
+        Returns:
+            list: 매치된 쿼리 정보 목록
+        """
+        return self.query_matcher.find_matching_queries(text, min_score, max_results)
+    
+    def get_query_info(self, query_id):
+        """쿼리 ID로 쿼리 정보 조회"""
+        return self.index_storage.get_query_info(query_id)
+    
+    def print_keyword_info(self):
+        """키워드 정보 출력"""
+        self.keyword_extractor.print_keyword_info()
+    
+    def close(self):
+        """저장소 닫기"""
+        self.index_storage.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+class CacheKeywors:
+    def __init__(self):
+
+        # 기능(Features) 키워드
+        self.features = [
+            "성능", "배터리", "화면", "무게", "휴대성", "저장용량", "속도", "램", "칩셋", "화질",
+            "해상도", "주사율", "발열", "멀티태스킹", "충전", "키보드", "카메라", "스피커", "음질", "밝기",
+            "디자인", "내구성", "방수"
+        ]
+
+        # 사용 용도(Usage) 키워드
+        self.usage = [
+            "공부", "필기", "그림", "영상", "영화", "게임", "웹서핑", "독서", "전자책", "웹툰","드로잉",
+            "애니메이션", "프로그래밍", "인터넷",
+            "인강", "유튜브", "넷플릭스", "OTT", "카카오톡", "문서", "어린이", "영상통화", "학습", "노트북"
+        ]
+
+        # 브랜드/플랫폼(Brands/Platform) 키워드
+        self.brands = [
+            "아이패드", "갤럭시탭", "애플", "삼성", "레노버", "샤오미", "화웨이", "LG", "서피스",
+            "안드로이드", "iOS"
+        ]
+
+        # 기타(Others) 키워드
+        self.others = [
+            "가성비", "가격", "S펜", "애플펜슬", "생태계", "연동", "호환성", "업데이트",
+            "AS", "Wi-Fi", "LTE", "SD카드", "USB-C", "필압", "필기감", "인치", "크기", "메모리", "렉", "터치"
+        ]
+
+        # 위 네 리스트를 합쳐 총 80개(중복 검사 필요)
+        self.keywords_top80 = self.features + self.usage + self.brands + self.others
+
+        # Tier별 키워드 (중요도/빈도 순으로 구성했다고 가정)
+        self.keywords_top20 = [
+            "성능", "배터리", "화면", "가격", "가성비", "무게", "휴대성", "저장용량",
+            "공부", "필기", "그림", "영상", "게임", "아이패드", "갤럭시탭", "삼성",
+            "애플", "영화", "유튜브", "펜"
+        ]
+
+        # Top 40 = Top 20 + 추가 20
+        self.keywords_top40 = self.keywords_top20 + [
+            "화질", "해상도", "주사율", "램", "칩셋", "발열", "멀티태스킹", "충전",
+            "키보드", "디스플레이", "디자인", "S펜", "애플펜슬", "레노버", "샤오미",
+            "서피스", "안드로이드", "iOS", "넷플릭스", "인강"
+        ]
+
+        # Top 80 = Top 40 + 추가 40
+        self.keywords_top80 = self.keywords_top40 + [
+            "화웨이", "LG", "웹서핑", "독서", "전자책", "웹툰", "카카오톡", "내구성",
+            "연동", "SD카드", "USB-C", "스피커", "생태계", "속도", "밝기", "호환성",
+            "업데이트", "노트북", "LTE", "OTT", "카메라", "인치", "AMOLED", "IPS",
+            "크기", "메모리", "음질", "렉", "터치", "필압", "이북", "AS", "Wi-Fi",
+            "방수", "필기감", "강의", "어린이", "문서", "학습", "영상통화"
+        ]
+
+        # (참고) 카테고리별로도 정리해두면 추후 확장성↑
+        self.keywords_by_category = {
+            "features": self.features,
+            "usage": self.usage,
+            "brands": self.brands,
+            "others": self.others
+        }
+    
+    @staticmethod
+    def extract_keywords(text):
+        okt = Okt()
+        tokens = okt.pos(text, stem=True)
+        
+        # 동의어 처리 추가
+        keywords = [word for word, pos in tokens if pos in ('Noun', 'Verb', 'Adjective')]
+        
+        # 동의어 매핑 적용
+        synonym_dict = {
+            '그림': '드로잉',
+            '드로잉': '드로잉',
+            '그리기': '드로잉',
+            '디지털': '디지털',
+            '태블릿': '태블릿',
+            '아이패드': '아이패드',
+            '패드': '아이패드',
+            '디스플레이': '화면',
+            '화면': '화면',
+            '모니터': '화면',
+            '노트북': '노트북',
+            '랩탭': '노트북',
+            '게임': '게임',
+            '게이밍': '게임',
+            '아트': '드로잉',
+            '스크린': '화면',
+            '프로그래밍': '개발',
+            '코딩': '개발',
+            '작은': '소형',
+            '전자책': '독서',
+            '이북': '독서'
+        }
+
+        
+        normalized_keywords = []
+        for kw in keywords:
+            if kw in synonym_dict:
+                normalized_keywords.append(synonym_dict[kw])
+            else:
+                normalized_keywords.append(kw)
+        
+        return list(set(normalized_keywords))  # 중복 제거
+    def print_keyword_info(self):
+        print("===== Top 20 키워드 =====")
+        print(self.keywords_top20)
+        print("\n===== Top 40 키워드 =====")
+        print(self.keywords_top40)
+        print("\n===== Top 80 키워드 =====")
+        print(self.keywords_top80)
+        print("\n===== 카테고리별 키워드 =====")
+        for category, kw_list in self.keywords_by_category.items():
+            print(f"[{category}] : {kw_list}")
+    def math_category(self,text):
+        keywords = self.extract_keywords(text)
+        category = {}
+        feture_row=[]
+        usage_row=[]
+        brands_row=[]
+        others_row=[]
+        for kw in keywords:
+            if kw in self.features:
+                feture_row.append(kw)
+            elif kw in self.usage:
+                usage_row.append(kw)
+            elif kw in self.brands:
+                brands_row.append(kw)
+            elif kw in self.others:
+                others_row.append(kw)
+        category["features"]=feture_row
+        category["usage"]=usage_row
+        category["brands"]=brands_row
+        category["others"]=others_row
+        return category
+    def match_tier(self,keywords):
+        tier = {}
+        keywords_top80_row=[]
+        for kw in keywords:
+            if kw in self.keywords_top80:
+                keywords_top80_row.append(kw)
+        tier["top80"]=keywords_top80_row.copy()
+        iterser=list(set(self.keywords_top80)-set(self.keywords_top40))
+        for kw in iterser:
+            if kw in keywords:
+                keywords_top80_row.remove(kw)
+        tier["top40"]=keywords_top80_row.copy()
+        iterser=list(set(self.keywords_top40)-set(self.keywords_top20))
+        for kw in iterser:
+            if kw in keywords:
+                keywords_top80_row.remove(kw)
+        tier["top20"]=keywords_top80_row.copy()
+        return tier
+    
+class YouTubeCacheSystem:
+    def __init__(self,data_path=".quary_to_data.h5",qary_path=".keyword_to_quary.h5"):
+        self.cache = CacheManager(data_path)
+        self.cache_manager = KeywordQueryManager(qary_path)
+    def add_query(self,query_text,data,query_id=None):
+        if isinstance(data,list):
+            data=data[0]
+        if isinstance(query_text,list):
+            query_text=query_text[0]   
+        self.cache_manager.add_query(query_text,query_id)
+        inpitdict={query_text.replace(" ",""):[data]}
+        self.cache.add_hash(inpitdict)
+    def find_matching_queries(self,text,min_score=0.5, max_results=3):
+        if isinstance(text,list):
+            text=text[0]
+        matches= self.cache_manager.find_matching_queries(text,min_score,max_results)
+        if matches:
+            find_dict={matches[0]['query_text'].replace(" ",""):""}
+            out=self.cache.get_value(find_dict)
+            if out:
+                return list(self.cache.get_dict.values())[0][0], matches[0]['query_text']
+            else:
+                return False
+        else:
+            return False
+    def get_query_info(self,query_id):
+        return self.cache_manager.get_query_info(query_id)
+    def print_keyword_info(self):
+        return self.cache.print_keyword_info()
+    def math_category(self,text):
+        return self.cache.match_category(text)
+    def match_tier(self,keywords):
+        return self.cache.match_tier(keywords)
+    def close(self):
+        self.cache_manager.close()
+        self.cache.clean()
+    def __enter__(self):
+        return self
+    def __exit__(self,exc_type,exc_val,exc_tb):
+        self.close()
+
+    """
+    # 인덱스 매니저 인스턴스 생성
+manager = KeywordIndexManager('query_index.h5')
+
+# 쿼리 추가 (자동 ID 생성)
+query_id = manager.add_query('디지털 드로잉용 아이패드 태블릿 추천')
+
+# 또는 ID를 직접 지정
+query_id = manager.add_query('노트북 배터리 오래가는 모델 추천', query_id='notebook_battery')
+
+# 파일 닫기 
+manager.close()
+    등록 예시
+    """
+    """
+    # 키워드 검색으로 유사 쿼리 찾기
+user_query = "아이패드 그림 그리기용 추천해주세요"
+matches = manager.find_matching_queries(user_query)
+
+if matches:
+    best_match = matches[0]
+    original_query_text = best_match['query_text']
+    query_id = best_match['query_id']
+    
+    print(f"원본 쿼리: {original_query_text}")
+    print(f"쿼리 ID: {query_id}")
+    """
+
+# 테스트 출력
+if __name__ == "__main__":
+
+
+        # 테스트용 파일 경로 (기존 파일이 있다면 삭제)
+    CACHE_FILE = "youtube_cache_test.h5"
+    QUERY_INDEX_FILE = "youtube_query_index_test.h5"
+    for f in [CACHE_FILE, QUERY_INDEX_FILE]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    # 예시 데이터셋: 각 쿼리와 연결된 YouTube 영상 데이터
+    youtube_data = [
+        {
+            "query": "디지털 드로잉용 아이패드 태블릿 추천",
+            "data": {
+                "video_id": "video123",
+                "title": "디지털 드로잉용 아이패드 태블릿 추천 영상",
+                "description": "이 영상에서는 디지털 드로잉에 최적화된 아이패드 태블릿을 소개합니다."
+            }
+        },
+        {
+            "query": "노트북 배터리 오래가는 모델 추천",
+            "data": {
+                "video_id": "video456",
+                "title": "배터리 수명이 긴 노트북 리뷰",
+                "description": "최신 노트북 중 배터리 성능이 뛰어난 모델들을 비교합니다."
+            }
+        },
+        {
+            "query": "갤럭시탭 S7 vs 아이패드 프로 비교",
+            "data": {
+                "video_id": "video789",
+                "title": "갤럭시탭 S7 vs 아이패드 프로, 어느 태블릿이 좋을까?",
+                "description": "두 태블릿의 성능과 사용성을 상세 비교한 리뷰 영상입니다."
+            }
+        }
+    ]
+
+    # YouTubeCacheSystem 인스턴스 생성 (파일 경로 지정)
+    youtube_cache = YouTubeCacheSystem(data_path=CACHE_FILE, qary_path=QUERY_INDEX_FILE)
+
+    # 데이터셋의 각 쿼리와 관련 데이터를 시스템에 추가
+    for item in youtube_data:
+        query_text = item["query"]
+        data = item["data"]
+        youtube_cache.add_query(query_text, data)
+        print(f"쿼리 추가: {query_text}")
+
+    print("\n--- 추가된 쿼리들 ---")
+    # 등록된 쿼리 ID들을 확인 (내부 인덱스에 저장된 query_id 리스트)
+    with youtube_cache.cache_manager.index_storage as storage:
+        all_queries = storage.get_all_queries()
+        print("등록된 쿼리 ID:", all_queries)
+
+    # 검색 테스트: 비슷한 쿼리로 매칭 확인
+    search_query = "아이패드 드로잉 태블릿 추천"
+    result = youtube_cache.find_matching_queries(search_query, min_score=0.5, max_results=3)
+
+    print("\n--- 검색 결과 ---")
+    if result:
+        matched_data, matched_query_id = result
+        print("매칭된 데이터:")
+       # pprint(matched_data)
+        print("매칭된 쿼리 ID:", matched_query_id)
+    else:
+        print("매칭되는 쿼리가 없습니다.")
+
+    # 시스템 닫기
+    youtube_cache.close()
+    
+    

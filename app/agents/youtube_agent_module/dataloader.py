@@ -6,7 +6,6 @@ import pandas as pd
 import tiktoken
 from langchain_openai import ChatOpenAI as OpenAI
 from langchain.chains import RetrievalQA
-from dotenv import load_dotenv
 import json
 from langchain_core.prompts import PromptTemplate
 from time import sleep
@@ -636,7 +635,7 @@ class Dataprocessor:
         LLM 호출 시 model_name과 temperature를 지정할 수 있습니다.
         """
         model_name="chatgpt-4o-latest"
-        load_dotenv()
+
         #self.vectorstore = self.create_vector_store(persist_directory=persist_directory)
         self.vectorstore = self.create_vector_store_active(persist_directory=persist_directory)
         self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={'k': self.k_value})
@@ -644,7 +643,6 @@ class Dataprocessor:
         qa = RetrievalQA.from_chain_type(llm=self.llm, chain_type="stuff", retriever=self.retriever,chain_type_kwargs={"prompt": self.prompt},return_source_documents=True)  # 이 옵션 추가!)
         self.qa=qa
     def create_qa_chain_from_store(self,model_name="gpt-4o-mini", temperature=0, persist_directory="./app/agents/youtube_agent_module/data/vector_db.h5"):
-        load_dotenv()
 
         log_wrapper("벡터스토어 로드 완료")
         #self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={'k': self.k_value})
