@@ -166,7 +166,7 @@ class SpecRecommender(BaseAgent):
         return int(match.group(1).replace(",", "")) if match else None
 
 
-    async def get_product_details(self, product_name: str) -> dict:
+    async def get_product_details(self, product_name: str, spec_results: Dict[str, Any]) -> dict:
         """
         Returns detailed specifications and price of the given product.
         """
@@ -198,14 +198,30 @@ class SpecRecommender(BaseAgent):
         print(f"🔍 핵심 사항 확인: {core_specs}")
 
         # LLM 호출하여 장점 & 단점 생성
-        return await self.fetch_product_analysis(product_name, price, core_specs)
+        return await self.fetch_product_analysis(product_name, price, core_specs, spec_results)
 
-    async def fetch_product_analysis(self, product_name: str, price: Any, core_specs: list):
+    async def fetch_product_details(self, product_name: str, price: Any, core_specs: list, spec_results: dict):
         """
         Calls LLM to generate product pros/cons and returns full product details.
+        먼저 spec_results에서 product_name을 찾아보고, 존재하면 해당 값을 반환한다.
+        없을 경우 LLM을 호출하여 추천 이유 및 핵심 사항을 생성한다.
         """
         try:
-            # LLM 호출
+            # ✅ 1️⃣ spec_results에서 product_name 확인
+            for product in spec_results.get("추천 제품", []):
+                if product["제품명"] == product_name:
+                    logger.info(f"🔍 spec_results에서 '{product_name}'을 찾았습니다. 기존 결과 반환.")
+                    return {
+                        "specifications": {
+                            "추천 이유": product["추천 이유"],
+                            "핵심 사항": product["핵심 사항"]
+                        },
+                        "purchase_info": self.purchase_inform(product_name)
+                    }
+
+            # ✅ 2️⃣ spec_results에 없다면 LLM 호출
+            logger.info(f"🔍 spec_results에서 '{product_name}'을 찾지 못함. LLM 호출 진행.")
+
             response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
                 {
                     "role": "system",
@@ -245,7 +261,7 @@ class SpecRecommender(BaseAgent):
             # JSON 변환
             product_summary = json.loads(response_text)
 
-            # ✅ "추천 이유"가 없으면 기본값 추가
+            # ✅ 3️⃣ "추천 이유"가 없으면 기본값 추가
             if "추천 이유" not in product_summary:
                 product_summary["추천 이유"] = {"장점": ["정보 없음"], "단점": ["정보 없음"]}
 
@@ -268,6 +284,7 @@ class SpecRecommender(BaseAgent):
                 },
                 "purchase_info": self.purchase_inform(product_name)
             }
+
 
 
 

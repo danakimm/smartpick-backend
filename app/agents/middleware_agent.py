@@ -98,13 +98,13 @@ class MiddlewareAgent:
             logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
             return {"error": "최종 추천을 생성하는 중 오류 발생"}
 
-    async def fetch_product_details(self, recommended_products: List[str], state: AgentState, youtube_results: Dict[str, Any]):
+    async def fetch_product_details(self, recommended_products: List[str], state: AgentState, spec_results: Dict[str, Any], youtube_results: Dict[str, Any]):
         """
         Extracts detailed information (price, pros/cons, specifications) for each recommended product.
         """
         query = state["question"]
 
-        spec_info = await self.spec_agent.get_product_details(recommended_products[0])
+        spec_info = await self.spec_agent.get_product_details(recommended_products[0], spec_results)
         review_info = await self.review_agent.get_product_details(recommended_products[0])
         youtube_info = youtube_results
 
