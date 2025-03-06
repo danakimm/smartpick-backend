@@ -111,8 +111,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         }
                     })
 
-                    # completed 상태인 경우 워크플로우 실행
-                    if response.get('status') == "completed":
+                    # requirements_collected 상태인 경우 워크플로우 실행
+                    if response.get('status') == "requirements_collected":
                         try:
                             agent_states = await question_agent._prepare_agent_states(response.get('requirements', ""))
 
