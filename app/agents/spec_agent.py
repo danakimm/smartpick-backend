@@ -262,6 +262,7 @@ class SpecRecommender(BaseAgent):
                 })
 
             # 최종 정제된 제품 정보 반환
+            print(product_summary)
             specifications = {
                 "추천 이유": product_summary["추천 이유"],
                 "핵심 사항": updated_core_specs
