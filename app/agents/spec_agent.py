@@ -188,13 +188,13 @@ class SpecRecommender(BaseAgent):
             product_summary = json.loads(response_text)
 
             # 응답 데이터 확인
-            if "추천 이유" not in product_summary:
-                logger.error(f"❌ '추천 이유'가 LLM 응답에 없음: {product_summary}")
-                product_summary["추천 이유"] = {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]}
+            # if "추천 이유" not in product_summary:
+                #logger.error(f"❌ '추천 이유'가 LLM 응답에 없음: {product_summary}")
+                #product_summary["추천 이유"] = {"pros": ["LLM 응답 오류"], "cons": ["LLM 응답 오류"]}
 
-            if "핵심 사항" not in product_summary:
-                logger.error(f"❌ '핵심 사항'이 LLM 응답에 없음: {product_summary}")
-                product_summary["핵심 사항"] = []
+            # if "핵심 사항" not in product_summary:
+                #logger.error(f"❌ '핵심 사항'이 LLM 응답에 없음: {product_summary}")
+                #product_summary["핵심 사항"] = []
 
             # LLM 응답에 설명이 없으면 보완
             updated_core_specs = []
