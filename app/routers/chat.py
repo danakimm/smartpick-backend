@@ -119,7 +119,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             # AgentState 형식에 맞는 초기 상태 생성
                             initial_state = {
                                 "question": response.get("requirements", ""),
-                                "sub_questions": [],
                                 "youtube_agent_state": agent_states.get("youtube_agent_state", {}),
                                 "review_agent_state": agent_states.get("review_agent_state", {}),
                                 "spec_agent_state": agent_states.get("spec_agent_state", {}),
