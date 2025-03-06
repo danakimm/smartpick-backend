@@ -71,9 +71,11 @@ async def middleware_processing(state: AgentState) -> Dict:
         return {**state, "error": "미들웨어 처리 중 오류 발생"}
 
 async def report_generation(state: AgentState) -> Dict:
-    logger.debug(f"Report input state: {state}")
+    import pprint
+    logger.debug(f"Report input state: {pprint(state)}")
     try:
         report_result = await report_agent.run(state['middleware_results'])
+
         logger.debug(f"Final result: {report_result}")
         return {
             **state,  # 기존 state 유지

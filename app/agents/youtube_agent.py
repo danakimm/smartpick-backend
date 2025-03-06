@@ -32,7 +32,7 @@ class YouTubeAgent(BaseAgent):
             return {"fail error": "query key is not in input"}
         
         
-        self.query = self.input["query"]
+        self.query = [self.input["query"][0] + ", 중요하게 확인할 키워드들 : " + ", ".join(self.input["검색_키워드"]["필수_포함"])]
         try:
             result=self.CacheSystem.find_matching_queries(self.query)
             if result:
