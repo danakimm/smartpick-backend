@@ -13,7 +13,7 @@ class AgentState(TypedDict):
     review_results: dict
     spec_results: dict
     middleware_results: dict
-    final_report: str
+    report_results: str
     feedback: str  # 사용자 피드백
     feedback_type: str  # 'refinement' 또는 'question'
     refined_requirements: dict  # 피드백 기반 수정된 요구사항
@@ -77,19 +77,14 @@ async def report_generation(state: AgentState) -> Dict:
     logger.debug(f"Report input state: {state}")
     
     try:
-        final_result = {
-            "final_report": state["middleware_results"]["recommendations"],
-            "analysis": state["middleware_results"]["analysis"]
-        }
-        logger.debug(f"Final result: {final_result}")
-        return final_result
+        report_result = await report_agent.run(state['middleware_results'])
+        logger.debug(f"Final result: {report_result}")
+        return {"report_results": report_result}
         
     except Exception as e:
         logger.error(f"Error in report generation: {e}")
-        return {
-            "final_report": "최종 보고서 생성 중 오류가 발생했습니다.",
-            "analysis": {}
-        }
+        return {"error": "리포트 생성 중 오류 발생"}
+
 
 async def handle_feedback(state: AgentState) -> Dict:
     logger.debug(f"Processing feedback: {state['feedback']}")
