@@ -110,8 +110,8 @@ class MiddlewareAgent:
         print(query)
         #query = state.get("question_info", {}).get("query", "질문 정보 없음")
         spec_info = await self.spec_agent.get_product_details(recommended_products[0])
-        review_info = await self.review_agent.get_product_details(recommended_products[0])
-        youtube_info = youtube_results
+        review_info = []#await self.review_agent.get_product_details(recommended_products[0])
+        youtube_info = []#youtube_results
 
         product_details = {
 
@@ -123,5 +123,7 @@ class MiddlewareAgent:
             "specification" : [spec_info] # 특성 에이전트 + 가격, 별점, 링크
         
         }
+
+        print(product_details)
 
         return product_details  
