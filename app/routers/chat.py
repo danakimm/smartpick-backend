@@ -36,6 +36,22 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
         while True:
             message = await websocket.receive_json()
+            
+            # 연결 종료 메시지 처리 추가
+            if message.get("type") == "close":
+                # 진행 중인 워크플로우가 있다면 정리
+                if initial_app:
+                    await initial_app.aclose()
+                if feedback_app:
+                    await feedback_app.aclose()
+                
+                # QuestionAgent 정리
+                if question_agent:
+                    await question_agent.close()  # QuestionAgent에 close 메서드가 있다면
+                
+                logger.info(f"Closing connection for client {client_id}")
+                await websocket.close()
+                break
 
             if message.get("type") != "feedback":
                 # 일반 메시지 처리 (요구사항 수집)
