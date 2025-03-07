@@ -33,8 +33,7 @@ class ProductRecommender(BaseAgent):
         scenario = f"""디지털 기기 사용 시나리오:
     - 주요 활동: {', '.join(requirements['사용_시나리오']['주요_활동'])}
     - 사용 환경: {', '.join(requirements['사용_시나리오']['사용_환경'])}
-    - 사용 시간: {requirements['사용_시나리오']['사용_시간']}
-    - 사용자 수준: {requirements['사용_시나리오']['사용자_수준']}"""
+    - 사용 시간: {requirements['사용_시나리오']['사용_시간']}"""
 
         concerns = f"""제품 관련 주요 고려사항:
     - 선호 브랜드: {', '.join(requirements['주요_관심사']['브랜드_선호도'])}
@@ -60,9 +59,6 @@ class ProductRecommender(BaseAgent):
         # 사용 시간 관련 리뷰
         search_queries.append(f"사용 시간 {requirements['사용_시나리오']['사용_시간']}")
 
-        # 사용자 수준 관련 리뷰
-        search_queries.append(f"{requirements['사용_시나리오']['사용자_수준']} 사용자")
-        
         # 브랜드 선호도 관련 리뷰
         search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
         
@@ -239,10 +235,10 @@ class ProductRecommender(BaseAgent):
         }
 
         # 실제 프롬프트 내용 확인
-        formatted_prompt = prompt.format_prompt(**prompt_data)
-        logger.debug("\n=== 실제 프롬프트 내용 ===")
-        logger.debug(formatted_prompt.to_string())  # 직접 포맷된 내용 출력
-        logger.debug("\n=== 프롬프트 끝 ===\n")
+        #formatted_prompt = prompt.format_prompt(**prompt_data)
+        #logger.debug("\n=== 실제 프롬프트 내용 ===")
+        #logger.debug(formatted_prompt.to_string())  # 직접 포맷된 내용 출력
+        #logger.debug("\n=== 프롬프트 끝 ===\n")
 
         # ChatGPT를 통한 추천 생성
         chain = prompt | ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key)
@@ -526,7 +522,6 @@ if __name__ == "__main__":
             "주요_활동": ["디지털 드로잉"],
             "사용_환경": ["카페", "이동 중", "실내"],
             "사용_시간": "하루 5시간 이상",
-            "사용자_수준": "취미 작가"
         },
         "주요_관심사": {
             "브랜드_선호도": ["애플"],
@@ -542,6 +537,8 @@ if __name__ == "__main__":
             "AS 및 내구성",
         ]
     }
+
+    user_review_requirements = {'사용_시나리오': {'주요_활동': ['디지털 아트', '그림 그리기'], '사용_환경': ['실내'], '사용_시간': '장시간 사용', '사용자_수준': '전문가'}, '주요_관심사': {'브랜드_선호도': ['애플'], '불편사항': [], '만족도_중요항목': ['펜 지원', '디스플레이 품질']}, '감성적_요구사항': {'디자인_선호도': [], '가격대_심리': '프리미엄'}, '사용자_우려사항': []}
     
     # 추천 받기
     mt = time.time()
