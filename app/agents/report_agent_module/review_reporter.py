@@ -65,8 +65,12 @@ class ReviewReporter(BaseReporter):
 
         """
         cachepath="review_cache.h5"
-        find_dict={data["product_name"].replace(" ",""):[]}
-        cache_key=data["product_name"].replace(" ","")
+        try:
+            find_dict={data["product_name"].replace(" ",""):[]}
+            cache_key=data["product_name"].replace(" ","")
+        except:
+            find_dict=None
+            cache_key=None
         require_key=required_keyt
         reject_key=None
         #####################################################################

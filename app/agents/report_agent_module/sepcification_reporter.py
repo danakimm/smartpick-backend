@@ -144,8 +144,13 @@ class SpecificationReporter(BaseReporter):
                     제품 스펙 및 전문가 소견 : {data}
         """
         cachepath="Specification_cache.h5"
-        find_dict={data["제품명"].replace(" ",""):[]}
-        cache_key=data["제품명"].replace(" ","")
+        try:
+            find_dict={data["제품명"].replace(" ",""):[]}
+            cache_key=data["제품명"].replace(" ","")
+
+        except:
+            find_dict=None
+            cache_key=None
         reject_key=None
         #####################################################################
         super().__init__(

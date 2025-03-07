@@ -188,8 +188,10 @@ class BaseReporter:
             return list(self.cache.get_dict.values())[0],["cached output"]
         else:
             result, response=self.get_response_with_llm()
-            inpitdict={self.cache_key:result}
-            self.cache.add_hash(inpitdict,reject_key=self.reject_key,require_key=self.require_key)
+            if not self.cache_key:
+                inpitdict={self.cache_key:result}
+                self.cache.add_hash(inpitdict,reject_key=self.reject_key,require_key=self.require_key)
+                
             return result, response
     def try_get_response(self,query,num):
         if len(self.selfanswer)>0:

@@ -608,7 +608,7 @@ class RAGOUT():
         self.output['llm_process_data']={}
         self.marker=True
         try:
-            self.output['raw_meta_data']['링크']=self.fomatted_data['data']['링크']
+            self.output['raw_meta_data']['링크']=self.fomatted_data['data']['링크'].replace("watch?","embed/")
             self.output['raw_meta_data']['태그']=self.fomatted_data['data']['태그']
             self.output['raw_meta_data']['조회수']=self.fomatted_data['data']['조회수']
             self.output['raw_meta_data']['제목']=self.fomatted_data['data']['제목']
@@ -637,7 +637,7 @@ class RAGOUT():
             self.output['llm_process_data']['seconds']=self.video_extraction['seconds']
             self.output['llm_process_data']['descriptions']=self.video_extraction['descriptions']
             self.output['llm_process_data']['codes']=self.video_extraction['codes']
-            self.output['llm_process_data']['clip']=self.video_extraction['clip']
+            self.output['llm_process_data']['clip']=self.video_extraction['clip'].replace("watch?","embed/")
         except:
             self.output['llm_process_data']['timestamps']="적합한 데이터 추론 실패"
             self.output['llm_process_data']['timestampsdiscriptions']="적합한 데이터 추론 실패"
