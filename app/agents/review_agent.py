@@ -223,7 +223,7 @@ class ProductRecommender(BaseAgent):
         7. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
 
         human_template = """다음 형식으로 정확히 추천해주세요:
-{"recommendations": [{"rank": 1,"product_name": "최우선 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources": ["플랫폼1","플랫폼2"]},{"rank": 2,"product_name": "차선책 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"differences": ["첫 번째 추천 제품과의 차이점 1","첫 번째 추천 제품과의 차이점 2"],"review_sources": ["플랫폼1","플랫폼2"]}]}"""
+{{"recommendations":[{{"rank":1,"product_name":"최우선 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}},{{"rank":2,"product_name":"차선책 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}}]}}"""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_template),
@@ -518,7 +518,7 @@ if __name__ == "__main__":
 
     import time
     st=time.time()
-    recommender = ProductRecommender("tablet_reviews_db")
+    recommender = ProductRecommender()
     
     # 사용자 요구사항 예시
     user_review_requirements = {
