@@ -106,7 +106,8 @@ class MiddlewareAgent:
 
         spec_info = await self.spec_agent.get_product_details(recommended_products[0], spec_results)
         print(spec_info)
-        eview_info = await self.review_agent.get_product_details(recommended_products[0])
+        review_info = await self.review_agent.get_product_details(recommended_products[0])
+        logger.debug(review_info)
         youtube_info = youtube_results
 
         product_details = {
