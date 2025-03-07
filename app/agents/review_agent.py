@@ -99,10 +99,13 @@ class ProductRecommender(BaseAgent):
             relevant_reviews = self.db_manager.search_reviews(
                 query=query,
                 similarity_threshold=0.6,
-                max_results=20,
-                exact_product_match=False
+                max_results=10,
+                exact_product_match=False,
+                min_quality='medium'
             )
             all_reviews.extend(relevant_reviews)
+
+        logger.debug(f"Initial reviews count: {len(all_reviews)}")
 
         # 중복 리뷰 제거 및 품질 필터링
         filtered_reviews = []
@@ -112,33 +115,37 @@ class ProductRecommender(BaseAgent):
             if review_text not in seen_reviews and len(review_text) > 20:  # 최소 길이 필터
                 filtered_reviews.append(review)
                 seen_reviews.add(review_text)
-        
+
+        logger.debug(f"After filtering: {len(filtered_reviews)}")
+
         # 제품별로 상위 리뷰들을 모두 수집
         product_reviews = {}
         for review in filtered_reviews:
             product = review['product']
             if product not in product_reviews:
                 product_reviews[product] = []
-            # 리뷰 품질 점수 계산
-            quality_score = (
-                review['similarity_score'] * 0.4 +  # 검색 관련성
-                (len(review['text']) / 1000) * 0.3 +  # 리뷰 길이
-                (review.get('rating', 3) / 5) * 0.3  # 평점
-            )
-            review['quality_score'] = quality_score
             product_reviews[product].append(review)
-        
-        # 각 제품별로 리뷰들을 similarity_score 기준으로 정렬하고 상위 5개 선택
+
+
+        # 각 제품별로 리뷰들을 similarity_score 기준으로 정렬
         analyzed_products = {}
         for product, reviews in product_reviews.items():
-            sorted_reviews = sorted(reviews, key=lambda x: x['similarity_score'], reverse=True)
+
+            # similarity_score를 고려하여 정렬
+            sorted_reviews = sorted(
+                reviews,
+                key=lambda x: x['similarity_score'],
+                reverse=True
+            )
+
             analyzed_products[product] = {
-                'reviews': sorted_reviews[:10],  # 상위 10개 리뷰 선택
+                'reviews': sorted_reviews[:5],  # 상위 5개 리뷰 선택
                 'avg_rating': sum(r['rating'] for r in reviews) / len(reviews),
                 'avg_similarity': sum(r['similarity_score'] for r in reviews) / len(reviews),
-                'avg_quality': sum(r['quality_score'] for r in reviews) / len(reviews),
+                'avg_quality': sum(1.0 if r.get('quality') == 'high' else 0.6 if r.get('quality') == 'medium' else 0.3 for r in reviews) / len(reviews),
                 'review_count': len(reviews)
             }
+
 
         # 평균 유사도와 평점을 기준으로 제품들을 정렬
         relevant_products = sorted(
@@ -148,7 +155,7 @@ class ProductRecommender(BaseAgent):
                 x[1]['avg_quality'] * 0.2       # 리뷰 품질 20%
             ),
             reverse=True
-        )
+            )[:5] 
 
         if not relevant_products:
             return {
@@ -165,7 +172,7 @@ class ProductRecommender(BaseAgent):
 
         # 리뷰 컨텍스트 생성 - 각 제품별로 여러 리뷰 종합
         review_contexts = []
-        for product, data in relevant_products[:5]:  # 상위 5개 제품만 선택
+        for product, data in relevant_products:
             product_context = f"""
             제품명: {product}
             전체 검토된 리뷰 수: {data['review_count']}
@@ -184,7 +191,6 @@ class ProductRecommender(BaseAgent):
                 - 상세 내용: {review['text']}
                 """
             
-            review_contexts.append(product_context)
 
         # 사용자 요구사항 포맷팅
         scenario_text, concerns_text, worries_text = self._format_user_requirements(requirements)
@@ -209,14 +215,15 @@ class ProductRecommender(BaseAgent):
         [검색된 제품 리뷰들]
         {review_contexts}
 
-        다음 규칙을 반드시 지켜주세요:
+다음 규칙을 반드시 지켜주세요:
         1. 반드시 제공된 리뷰에 언급된 제품만 추천해야 합니다
-        2. 실제 리뷰 내용만 인용해야 합니다
+        2. 실제 리뷰 내용들만 인용해야 합니다
         3. 리뷰에 없는 기능이나 특징을 임의로 추가하면 안됩니다
         4. 사용자의 구체적인 요구사항과 제품의 특성을 매칭하여 추천 이유를 설명하세요
-        5. 각 추천 이유는 반드시 구체적인 리뷰 인용과 해당 리뷰의 출처 플랫폼을 포함해야 합니다
-        6. 제시된 형식을 정확히 따라주세요
-        7. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
+        5. reasons 배열의 각 항목은 실제 리뷰 내용만을 포함해야 하며, 출처나 번호 등의 부가 정보는 포함하지 않습니다
+        6. suitability 배열의 각 항목은 사용자의 구체적인 요구사항과 매칭되어야 합니다
+        7. review_sources 배열에만 출처 플랫폼 정보를 포함합니다
+        8. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
 
         human_template = """다음 형식으로 정확히 추천해주세요:
 {{"recommendations":[{{"rank":1,"product_name":"최우선 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}},{{"rank":2,"product_name":"차선책 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}}]}}"""
@@ -545,7 +552,7 @@ if __name__ == "__main__":
     print(mt-st)
     result = recommender.generate_recommendations(user_review_requirements)
     print("\n=== 제품 추천 결과 ===")
-    print(result["recommendations"])
+    print(result)
     print(time.time()-mt)
 
     
