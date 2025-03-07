@@ -14,10 +14,18 @@ echo "도커 컨테이너 실행 중..."
 docker run -d \
   --name smartpick-dev \
   --restart unless-stopped \
+<<<<<<< HEAD
+=======
+  --network host \
+>>>>>>> origin/main
   -p 8000:8000 \
   -v "$(pwd)":/app \
   --env-file .env \
   smartpick-backend-dev
 
 echo "개발 서버가 http://localhost:8000 에서 실행 중입니다."
+<<<<<<< HEAD
 echo "로그를 보려면: docker logs -f smartpick-dev" 
+=======
+echo "로그를 보려면: docker logs -f smartpick-dev" 
+>>>>>>> origin/main

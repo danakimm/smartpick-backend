@@ -50,9 +50,13 @@ async def check_analysis_results():
     """모든 리뷰의 감성분석 및 품질 평가 상태를 확인하는 함수"""
     
     db_path = r'C:\Users\USER\Desktop\inner\SmartPick\git\smartpick-backend\app\agents\tablet_reviews_db'
+<<<<<<< HEAD
     db_path = '/home/ubuntu/smartpick-backend/app/agents/tablet_reviews_db'
     db_path = '/app/app/agents/tablet_reviews_db'
     db_manager = ReviewDBManager(db_path)
+=======
+    db_manager = ReviewDBManager(os.getenv('REVIEW_DB_PATH'))
+>>>>>>> origin/main
     
     print("\n=== 리뷰 분석 상태 확인 ===")
     

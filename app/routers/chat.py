@@ -7,11 +7,16 @@ from app.utils.logger import logger
 
 router = APIRouter()
 active_connections: Dict[str, WebSocket] = {}  # client_id로 연결 관리
+<<<<<<< HEAD
 def remove_none(data):
     if not data:
         data={"key":"None"}
         return data
     return data
+=======
+
+
+>>>>>>> origin/main
 @router.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
@@ -32,17 +37,28 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             "type": "message",
             "client_id": client_id,
             "data": {
+<<<<<<< HEAD
                 "response": remove_none(initial_response).get("response", ""),
                 "status": remove_none(initial_response).get("status", "")
+=======
+                "response": initial_response.get("response", ""),
+                "status": initial_response.get("status", "")
+>>>>>>> origin/main
             }
         })
 
         while True:
             message = await websocket.receive_json()
+<<<<<<< HEAD
             #if remove_none(message).get("message"):
                 
             # 연결 종료 메시지 처리 추가
             if remove_none(message).get("type") == "close":
+=======
+            
+            # 연결 종료 메시지 처리 추가
+            if message.get("type") == "close":
+>>>>>>> origin/main
                 # 진행 중인 워크플로우가 있다면 정리
                 if initial_app:
                     await initial_app.aclose()
@@ -57,13 +73,20 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 await websocket.close()
                 break
 
+<<<<<<< HEAD
             if remove_none(message).get("type") != "feedback":
                 # 일반 메시지 처리 (요구사항 수집)
                 content = remove_none(message).get("content", "")
+=======
+            if message.get("type") != "feedback":
+                # 일반 메시지 처리 (요구사항 수집)
+                content = message.get("content", "")
+>>>>>>> origin/main
                 
                 # QuestionAgent 상태 업데이트
                 state = {
                     "user_input": content,
+<<<<<<< HEAD
                     "conversation_history": remove_none(initial_response).get('conversation_history', []),
                     "requirements": remove_none(initial_response).get('requirements', ""),
                     "collected_info": remove_none(initial_response).get('collected_info', {}),
@@ -71,6 +94,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     "current_question": remove_none(initial_response).get('current_question', ""),
                     "status": remove_none(initial_response).get('status', ""),
                     "additional_requirements": remove_none(initial_response).get('additional_requirements', "")
+=======
+                    "conversation_history": initial_response.get('conversation_history', []),
+                    "requirements": initial_response.get('requirements', ""),
+                    "collected_info": initial_response.get('collected_info', {}),
+                    "missing_info": initial_response.get('missing_info', []),
+                    "current_question": initial_response.get('current_question', ""),
+                    "status": initial_response.get('status', ""),
+                    "additional_requirements": initial_response.get('additional_requirements', "")
+>>>>>>> origin/main
                 }
 
                 try:
@@ -81,18 +113,32 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "type": "message",
                         "client_id": client_id,
                         "data": {
+<<<<<<< HEAD
                             "response": remove_none(response).get("response", ""),
                             "status": remove_none(response).get("status", "")
+=======
+                            "response": response.get("response", ""),
+                            "status": response.get("status", "")
+>>>>>>> origin/main
                         }
                     })
 
                     # requirements_collected 상태인 경우 초기 워크플로우 실행
+<<<<<<< HEAD
                     if remove_none(response).get('status') == "requirements_collected":
                         try:
                             agent_states = await question_agent._prepare_agent_states(remove_none(response).get('requirements', ""))
 
                             initial_state = {
                                 "question": remove_none(response).get("requirements", ""),
+=======
+                    if response.get('status') == "requirements_collected":
+                        try:
+                            agent_states = await question_agent._prepare_agent_states(response.get('requirements', ""))
+
+                            initial_state = {
+                                "question": response.get("requirements", ""),
+>>>>>>> origin/main
                                 "youtube_agent_state": agent_states.get("youtube_agent_state", {}),
                                 "review_agent_state": agent_states.get("review_agent_state", {}),
                                 "spec_agent_state": agent_states.get("spec_agent_state", {}),
@@ -140,12 +186,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             else:
                 # 피드백 처리
                 try:
+<<<<<<< HEAD
                     feedback_content = remove_none(message).get("content", "")
                     requirements = remove_none(initial_response).get("requirements", "")
+=======
+                    feedback_content = message.get("content", "")
+                    requirements = initial_response.get("requirements", "")
+>>>>>>> origin/main
 
                     # 피드백 워크플로우용 상태 준비
                     feedback_state = {
                         "question": requirements,
+<<<<<<< HEAD
                         "youtube_agent_state": remove_none(initial_response).get("youtube_agent_state", {}),
                         "review_agent_state": remove_none(initial_response).get("review_agent_state", {}),
                         "spec_agent_state": remove_none(initial_response).get("spec_agent_state", {}),
@@ -154,6 +206,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "spec_results": remove_none(initial_response).get("spec_results", {}),
                         "middleware_results": remove_none(initial_response).get("middleware_results", {}),
                         "final_report": remove_none(initial_response).get("final_report", ""),
+=======
+                        "youtube_agent_state": initial_response.get("youtube_agent_state", {}),
+                        "review_agent_state": initial_response.get("review_agent_state", {}),
+                        "spec_agent_state": initial_response.get("spec_agent_state", {}),
+                        "youtube_results": initial_response.get("youtube_results", {}),
+                        "review_results": initial_response.get("review_results", {}),
+                        "spec_results": initial_response.get("spec_results", {}),
+                        "middleware_results": initial_response.get("middleware_results", {}),
+                        "final_report": initial_response.get("final_report", ""),
+>>>>>>> origin/main
                         "feedback": feedback_content,
                         "feedback_type": "",
                         "refined_requirements": {},

@@ -1,10 +1,15 @@
 {
+<<<<<<< HEAD
     // Use IntelliSense to learn about possible attributes.["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--timeout-keep-alive", "60", "--ws-ping-interval", "30", "--ws-ping-timeout", "60"]
+=======
+    // Use IntelliSense to learn about possible attributes.
+>>>>>>> origin/main
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
+<<<<<<< HEAD
             "name": "server_debug",
             "type": "debugpy",
             "request": "launch",
@@ -24,6 +29,8 @@
             
         },
         {
+=======
+>>>>>>> origin/main
             "name": "test_workflow",
             "type": "debugpy",
             "request": "launch",

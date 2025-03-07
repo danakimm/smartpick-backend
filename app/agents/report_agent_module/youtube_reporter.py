@@ -5,7 +5,11 @@ from .template_generator import ResultTemplate, Product, Reviews, Purchase_Info_
 from .bsae_reporter import BaseReporter
 
 class YoutubeReporter(BaseReporter):
+<<<<<<< HEAD
     def __init__(self,input,query):
+=======
+    def __init__(self,input):
+>>>>>>> origin/main
         script=[]
         script.append('현재 첫번째 시도입니다.')
         script.append('두번째 시도입니다. 다음 질문과 함꼐 다시 생각해 보세요,')
@@ -61,7 +65,11 @@ class YoutubeReporter(BaseReporter):
         section1=input['youtube']['raw_meta_data']
         section1['자막']=section1['자막'].replace("\n\n","")
         section2=input['youtube']['llm_process_data']
+<<<<<<< HEAD
         query=query
+=======
+        query=data['query']
+>>>>>>> origin/main
         model=Node(prompt)
         selfquestion=[]
         selfanswer=[]
@@ -71,7 +79,11 @@ class YoutubeReporter(BaseReporter):
                     video_metadata:{data['raw_meta_data']}
                     LLM_process_data:{data['llm_process_data']}
         """
+<<<<<<< HEAD
         cachepath="youtube_cache.h5"
+=======
+        cachepath=".youtube_cache.h5"
+>>>>>>> origin/main
         find_dict={section1["제목"].replace(" ",""):[]}
         cache_key=section1["제목"].replace(" ","")
         reject_key=None
@@ -106,8 +118,13 @@ async def test_youtube_main():
         print(e)
         print(f"오류가 발생했습니다.반환값:{result[0]}")
     return youtuber, result
+<<<<<<< HEAD
 async def youtube_main(input,query):
     reporter=YoutubeReporter(input,query)
+=======
+async def youtube_main(input):
+    reporter=YoutubeReporter(input)
+>>>>>>> origin/main
     result,response=reporter.get_response()
     item_review=Reviews()
     youtuber=item_review.youtuber
