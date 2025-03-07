@@ -39,7 +39,7 @@ class MiddlewareAgent:
             return final_recommendation  # 🚨 If LLM fails, return error.
 
         # 3️⃣ Fetch detailed information for the recommended products
-        detailed_product_info = await self.fetch_product_details(final_recommendation["최종 추천 제품"], state, youtube_results)
+        detailed_product_info = await self.fetch_product_details(final_recommendation["최종 추천 제품"], state, spec_results, youtube_results)
 
         return {"middleware": detailed_product_info} if detailed_product_info else {"error": "추천 제품 정보를 가져오는 중 오류 발생"}
 
