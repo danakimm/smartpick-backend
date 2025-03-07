@@ -256,9 +256,8 @@ class SpecRecommender(BaseAgent):
         없을 경우 LLM을 호출하여 추천 이유 및 핵심 사항을 생성한다.
         """
         try:
-            # ✅ 1️⃣ spec_results에서 product_name 확인 (key error 방지)
-            recommended_products = spec_results.get("추천 제품", [])
-            for product in recommended_products:
+            # ✅ 1️⃣ spec_results에서 product_name 확인 (이미 존재하는 데이터 재사용)
+            for product in spec_results.get("추천 제품", []):
                 if product.get("제품명") == product_name:
                     logger.info(f"🔍 spec_results에서 '{product_name}'을 찾았습니다. 기존 결과 반환.")
                     return {
@@ -272,28 +271,54 @@ class SpecRecommender(BaseAgent):
             # ✅ 2️⃣ spec_results에 없다면 LLM 호출
             logger.info(f"🔍 spec_results에서 '{product_name}'을 찾지 못함. LLM 호출 진행.")
 
-            response = await ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key).ainvoke([
+            response = await ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.3,
+                api_key=self.openai_api_key
+            ).ainvoke([
                 {
                     "role": "system",
                     "content": """
-                    당신은 제품 추천 AI입니다. 제품의 장점(pros)과 단점(cons)을 3개씩 요약하고 JSON으로 반환하세요.
-                    또한, '핵심 사항'에 대해 '항목'과 '사양'을 참고하여 반드시 각 사양에 대한 구체적인 '설명'을 생성하세요.
-                    응답 예시는 아래와 같습니다:
+                    당신은 제품 추천 AI입니다. 사용자의 요청과 제품의 스펙을 바탕으로 제품의 장점과 단점을 분석하고, 핵심 사항의 설명을 자연스럽게 생성하세요.
+
+                    - **장점**:
+                        - 사용자의 입력(`사용자 입력`)과 제품의 스펙(`핵심 사항`)을 분석하여 중요한 장점을 3가지 생성하세요.
+                        - 사용자가 강조한 사항(예: "배터리 오래 가는 제품")이 있다면 이를 반영하세요.
+                        - 무작위로 장점을 생성하지 마세요.
+                        - 장점은 간결하고, 실제 사용자가 제품을 사용할 때 유용한 점을 강조하세요.
+
+                    - **단점**:
+                        - 제품의 한계를 반영하여 현실적인 단점 3개를 생성하세요.
+                        - 예를 들어, 가성비 제품이라면 "고급 기능 부족" 같은 단점이 있을 수 있습니다.
+
+                    - **핵심 사항 정리**:
+                        - 모든 `features_*` 항목을 그대로 `항목`으로 사용하세요. **새로운 카테고리를 생성하지 마세요.**
+                        - `"사양"`은 해당 항목의 정보를 자연스럽고 짧은 한 문장으로 변환하세요.
+                        - `"설명"`은 `"사양"`을 기반으로 **자연스럽고 상세한 문장**으로 제품의 활용 방식, 실생활에서의 유용성 등을 포함하여 작성하세요.
+                        - `"설명"`은 반드시 `"사양"`보다 길어야 합니다.
+
+                    **JSON 형식으로 출력하세요. 예제:**
                     ```json
                     {
                         "추천 이유": {
-                            "장점": ["장점 1", "장점 2", "장점 3"],
-                            "단점": ["단점 1", "단점 2", "단점 3"]
+                            "장점": ["M2 칩으로 강력한 성능", "Apple Pencil 2세대 지원", "고급스러운 디자인"],
+                            "단점": ["비싼 가격", "SD 카드 미지원", "충전기가 별도 구매"]
                         },
                         "핵심 사항": [
                             {
-                                "항목": "카메라",
-                                "사양": "50MP",
-                                "설명": "이 카메라는 저조도에서도 선명한 사진을 촬영할 수 있음."
+                                "항목": "디스플레이",
+                                "사양": "Liquid Retina 10.9인치",
+                                "설명": "10.9인치 Liquid Retina 디스플레이를 탑재하여 선명한 색감과 넓은 시야각을 제공합니다. 색 재현율이 뛰어나 영상 감상이나 디자인 작업에 적합합니다."
+                            },
+                            {
+                                "항목": "배터리 & 충전",
+                                "사양": "USB-C 충전 지원, 최대 30W 고속 충전 가능",
+                                "설명": "C타입 단자로 충전이 가능하며 USB3.1을 지원하여 데이터 전송 속도가 빠릅니다. 배터리는 약 8,900mAh 용량으로, 짧은 시간 내에 충전할 수 있습니다."
                             }
                         ]
                     }
                     ```
+                    **반드시 코드 블록(```json ... ```) 없이 JSON만 출력하세요.**
                     """
                 },
                 {
@@ -313,7 +338,10 @@ class SpecRecommender(BaseAgent):
                 product_summary = json.loads(response_text)
             except json.JSONDecodeError:
                 logger.error(f"❌ JSON 변환 실패: {response_text}")
-                product_summary = {"추천 이유": {"장점": ["정보 없음"], "단점": ["정보 없음"]}, "핵심 사항": core_specs}
+                product_summary = {
+                    "추천 이유": {"장점": ["정보 없음"], "단점": ["정보 없음"]},
+                    "핵심 사항": core_specs
+                }
 
             # ✅ 4️⃣ "추천 이유"가 없으면 기본값 추가
             product_summary.setdefault("추천 이유", {"장점": ["정보 없음"], "단점": ["정보 없음"]})
@@ -337,6 +365,7 @@ class SpecRecommender(BaseAgent):
                 },
                 "purchase_info": self.purchase_inform(product_name)
             }
+
 
     def purchase_inform(self, product_name):
         """
