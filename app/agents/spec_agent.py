@@ -220,7 +220,7 @@ class SpecRecommender(BaseAgent):
         Returns detailed specifications and price of the given product.
         """
         df = pd.read_csv(self.product_csv)
-        product_row = df[df["name"] == product_name]
+        product_row = df[df["rename"] == product_name]
 
         logger.info(f"🔍 검색된 제품명: {product_name}, 결과 개수: {len(product_row)}")
 
