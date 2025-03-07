@@ -105,7 +105,8 @@ class MiddlewareAgent:
         query = state["question"]
 
         spec_info = await self.spec_agent.get_product_details(recommended_products[0], spec_results)
-        review_info = await self.review_agent.get_product_details(recommended_products[0])
+        print(spec_info)
+        eview_info = await self.review_agent.get_product_details(recommended_products[0])
         youtube_info = youtube_results
 
         product_details = {
