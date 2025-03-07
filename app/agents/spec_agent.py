@@ -41,7 +41,7 @@ class SpecRecommender(BaseAgent):
 
         context = []
         for _, row in df.iterrows():
-            product_name = row["name"]
+            product_name = row["rename"]
             features_text = row.get("features_규격", "")
             product_price = self.extract_price(features_text)
             
