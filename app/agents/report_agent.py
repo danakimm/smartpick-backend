@@ -8,11 +8,7 @@ from typing import Dict, Any
 from abc import ABC, abstractmethod
 import threading
 from concurrent.futures import ThreadPoolExecutor
-<<<<<<< HEAD
 from app.utils.logger import logger
-=======
-
->>>>>>> origin/main
 class ReportAgent(BaseAgent):
     def __init__(self,name="report_agent"):
         self.name=name
@@ -30,26 +26,15 @@ class ReportAgent(BaseAgent):
         
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         data=state["middleware"]
-<<<<<<< HEAD
         youtube_input=data["youtube"][0]
         query=data["query"]
         review_input=data["review"][0]
         specification_input=data["specification"][0]
-=======
-        youtube_input=data["youtube"]
-        query=youtube_input["youtube"]["query"]
-        review_input=data["review"]
-        specification_input=data["specification"]
->>>>>>> origin/main
         
         # 동기 래퍼 함수들
         def youtube_wrapper():
             # 새 이벤트 루프를 생성하여 비동기 함수 실행
-<<<<<<< HEAD
             return asyncio.run(youtube_main(youtube_input,query))
-=======
-            return asyncio.run(youtube_main(youtube_input))
->>>>>>> origin/main
             
         def review_wrapper():
             return asyncio.run(review_main(review_input, query))

@@ -208,12 +208,8 @@ class ReviewDBManager:
         query: str, 
         similarity_threshold: float = 0.7, 
         max_results: int = 20,
-<<<<<<< HEAD
-        exact_product_match: bool = False
-=======
         exact_product_match: bool = False,
         min_quality: str = 'medium'
->>>>>>> origin/main
     ) -> List[Dict[str, Any]]:
         """
         리뷰 검색 메서드
@@ -223,11 +219,6 @@ class ReviewDBManager:
             similarity_threshold: 유사도 임계값
             max_results: 최대 결과 수
             exact_product_match: 정확한 제품명 일치 검색 여부
-<<<<<<< HEAD
-        """
-        if not self.vector_store:
-            return []
-=======
             min_quality: 최소 품질 기준('high', 'medium', 'low')
         """
         if not self.vector_store:
@@ -239,7 +230,6 @@ class ReviewDBManager:
             'low': 0.3
         }
         min_quality_score = quality_scores.get(min_quality, 0.6)
->>>>>>> origin/main
         
         try:
             # 정확한 제품명 일치 검색인 경우
@@ -269,32 +259,14 @@ class ReviewDBManager:
                     query,
                     k=max_results * 2  # 필터링 후 충분한 결과를 얻기 위해 더 많은 결과 검색
                 )
-<<<<<<< HEAD
-                
-                # 유사도 임계값 기반 필터링 (높을수록 더 유사)
-=======
 
                 # 유사도 임계값 기반 필터링
->>>>>>> origin/main
                 filtered_results = [
                     (doc, score) for doc, score in results
                     if score >= similarity_threshold
                 ]
                 
                 reviews = []
-<<<<<<< HEAD
-                for doc, score in filtered_results[:max_results]:  # 최대 결과 수 제한
-                    review_data = {
-                        'text': doc.page_content,
-                        'product': doc.metadata.get('product', ''),
-                        'rating': doc.metadata.get('rating', 0),
-                        'platform': doc.metadata.get('platform', ''),
-                        'similarity_score': score
-                    }
-                    reviews.append(review_data)
-                
-                return reviews
-=======
                 for doc, score in filtered_results:
                     quality = doc.metadata.get('quality', 'medium')
                     quality_score = quality_scores.get(quality, 0.6)
@@ -322,7 +294,6 @@ class ReviewDBManager:
                 
                 return sorted_reviews[:max_results]
                 
->>>>>>> origin/main
         except Exception as e:
             logger.error(f"Error searching for reviews: {str(e)}")
             return []

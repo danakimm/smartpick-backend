@@ -39,11 +39,7 @@ class MiddlewareAgent:
             return final_recommendation  # 🚨 If LLM fails, return error.
 
         # 3️⃣ Fetch detailed information for the recommended products
-<<<<<<< HEAD
-        detailed_product_info = await self.fetch_product_details(final_recommendation["최종 추천 제품"], state, youtube_results)
-=======
         detailed_product_info = await self.fetch_product_details(final_recommendation["최종 추천 제품"], state, spec_results, youtube_results)
->>>>>>> origin/main
 
         return {"middleware": detailed_product_info} if detailed_product_info else {"error": "추천 제품 정보를 가져오는 중 오류 발생"}
 
@@ -59,11 +55,7 @@ class MiddlewareAgent:
             llm_input = {
                 "사용자 리뷰 분석": review_data.get("recommendations", ["리뷰 데이터 없음"]),
                 "제품 스펙 추천": spec_data.get("추천 제품", ["스펙 데이터 없음"]),
-<<<<<<< HEAD
-                "유튜브 리뷰 분석": youtube_data.get("reviews", ["유튜브 리뷰 데이터 없음"])
-=======
                 "유튜브 리뷰 분석": ["유튜브 리뷰 데이터 없음"]
->>>>>>> origin/main
             }
 
             print(llm_input)
@@ -106,25 +98,16 @@ class MiddlewareAgent:
             logger.error(f"JSON 변환 실패: {e}, 응답 내용: {response_text}")
             return {"error": "최종 추천을 생성하는 중 오류 발생"}
 
-<<<<<<< HEAD
-    async def fetch_product_details(self, recommended_products: List[str], state: AgentState, youtube_results: Dict[str, Any]):
-=======
     async def fetch_product_details(self, recommended_products: List[str], state: AgentState, spec_results: Dict[str, Any], youtube_results: Dict[str, Any]):
->>>>>>> origin/main
         """
         Extracts detailed information (price, pros/cons, specifications) for each recommended product.
         """
         query = state["question"]
 
-<<<<<<< HEAD
-        spec_info = await self.spec_agent.get_product_details(recommended_products[0])
-        review_info = await self.review_agent.get_product_details(recommended_products[0])
-=======
         spec_info = await self.spec_agent.get_product_details(recommended_products[0], spec_results)
         print(spec_info)
         review_info = await self.review_agent.get_product_details(recommended_products[0])
         logger.debug(review_info)
->>>>>>> origin/main
         youtube_info = youtube_results
 
         product_details = {
@@ -136,8 +119,4 @@ class MiddlewareAgent:
             "specification": [spec_info]
         }
 
-<<<<<<< HEAD
-        print(product_details)
-=======
->>>>>>> origin/main
         return product_details  

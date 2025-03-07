@@ -33,12 +33,7 @@ class ProductRecommender(BaseAgent):
         scenario = f"""디지털 기기 사용 시나리오:
     - 주요 활동: {', '.join(requirements['사용_시나리오']['주요_활동'])}
     - 사용 환경: {', '.join(requirements['사용_시나리오']['사용_환경'])}
-<<<<<<< HEAD
-    - 사용 시간: {requirements['사용_시나리오']['사용_시간']}
-    - 사용자 수준: {requirements['사용_시나리오']['사용자_수준']}"""
-=======
     - 사용 시간: {requirements['사용_시나리오']['사용_시간']}"""
->>>>>>> origin/main
 
         concerns = f"""제품 관련 주요 고려사항:
     - 선호 브랜드: {', '.join(requirements['주요_관심사']['브랜드_선호도'])}
@@ -56,37 +51,6 @@ class ProductRecommender(BaseAgent):
         search_queries = []
         
         # 주요 활동 관련 리뷰
-<<<<<<< HEAD
-        search_queries.extend([f"{activity} 사용 경험" for activity in requirements['사용_시나리오']['주요_활동']])
-        
-        # 사용 환경 관련 리뷰
-        search_queries.extend([f"{env}에서 사용" for env in requirements['사용_시나리오']['사용_환경']])
-        
-        # 사용 시간 관련 리뷰
-        search_queries.append(f"사용 시간 {requirements['사용_시나리오']['사용_시간']}")
-
-        # 사용자 수준 관련 리뷰
-        search_queries.append(f"{requirements['사용_시나리오']['사용자_수준']} 사용자")
-        
-        # 브랜드 선호도 관련 리뷰
-        search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
-        
-        # 불편사항 관련 리뷰
-        search_queries.extend([f"{issue} 문제" for issue in requirements['주요_관심사']['불편사항']])
-        
-        # 만족도 중요항목 관련 리뷰
-        search_queries.extend([f"{item} 만족" for item in requirements['주요_관심사']['만족도_중요항목']])
-        
-        # 디자인 선호도 관련 리뷰
-        search_queries.extend([f"디자인 {pref}" for pref in requirements['감성적_요구사항']['디자인_선호도']])
-        
-        # 가격대 관련 리뷰 - '상관없음'이 아닐 때만 포함
-        price_sentiment = requirements['감성적_요구사항']['가격대_심리']
-        if price_sentiment != "상관없음":
-            if "저렴" in price_sentiment:
-                search_queries.extend(["가격 저렴", "가성비", "합리적인 가격"])
-            elif "비싸" in price_sentiment:
-=======
         if requirements['사용_시나리오']['주요_활동']:
             search_queries.extend([f"{activity}" for activity in requirements['사용_시나리오']['주요_활동']])
         
@@ -120,18 +84,13 @@ class ProductRecommender(BaseAgent):
             if "가성비" in price_sentiment:
                 search_queries.extend(["가격 저렴", "가성비", "합리적인 가격"])
             elif "프리미엄" in price_sentiment:
->>>>>>> origin/main
                 search_queries.extend(["가격이 비싸", "고가", "프리미엄"])
             else:
                 search_queries.append(f"가격 {price_sentiment}")
         
         # 우려사항 관련 리뷰
-<<<<<<< HEAD
-        search_queries.extend([f"{worry} 경험" for worry in requirements['사용자_우려사항']])
-=======
         if requirements['사용자_우려사항']:
             search_queries.extend([f"{worry}" for worry in requirements['사용자_우려사항']])
->>>>>>> origin/main
         
         # 빈 문자열이나 None 값 제거 및 중복 제거
         search_queries = list(set([
@@ -148,13 +107,6 @@ class ProductRecommender(BaseAgent):
             relevant_reviews = self.db_manager.search_reviews(
                 query=query,
                 similarity_threshold=0.6,
-<<<<<<< HEAD
-                max_results=20,
-                exact_product_match=False
-            )
-            all_reviews.extend(relevant_reviews)
-
-=======
                 max_results=10,
                 exact_product_match=False,
                 min_quality='medium'
@@ -163,54 +115,23 @@ class ProductRecommender(BaseAgent):
 
         logger.debug(f"Initial reviews count: {len(all_reviews)}")
 
->>>>>>> origin/main
         # 중복 리뷰 제거 및 품질 필터링
         filtered_reviews = []
         seen_reviews = set()
         for review in all_reviews:
             review_text = review['text']
-<<<<<<< HEAD
-            if review_text not in seen_reviews and len(review_text) > 20:  # 최소 길이 필터
-                filtered_reviews.append(review)
-                seen_reviews.add(review_text)
-        
-=======
             if review_text not in seen_reviews and len(review_text) > 15:  # 최소 길이 필터
                 filtered_reviews.append(review)
                 seen_reviews.add(review_text)
 
         logger.debug(f"After filtering: {len(filtered_reviews)}")
 
->>>>>>> origin/main
         # 제품별로 상위 리뷰들을 모두 수집
         product_reviews = {}
         for review in filtered_reviews:
             product = review['product']
             if product not in product_reviews:
                 product_reviews[product] = []
-<<<<<<< HEAD
-            # 리뷰 품질 점수 계산
-            quality_score = (
-                review['similarity_score'] * 0.4 +  # 검색 관련성
-                (len(review['text']) / 1000) * 0.3 +  # 리뷰 길이
-                (review.get('rating', 3) / 5) * 0.3  # 평점
-            )
-            review['quality_score'] = quality_score
-            product_reviews[product].append(review)
-        
-        # 각 제품별로 리뷰들을 similarity_score 기준으로 정렬하고 상위 5개 선택
-        analyzed_products = {}
-        for product, reviews in product_reviews.items():
-            sorted_reviews = sorted(reviews, key=lambda x: x['similarity_score'], reverse=True)
-            analyzed_products[product] = {
-                'reviews': sorted_reviews[:10],  # 상위 10개 리뷰 선택
-                'avg_rating': sum(r['rating'] for r in reviews) / len(reviews),
-                'avg_similarity': sum(r['similarity_score'] for r in reviews) / len(reviews),
-                'avg_quality': sum(r['quality_score'] for r in reviews) / len(reviews),
-                'review_count': len(reviews)
-            }
-
-=======
             product_reviews[product].append(review)
 
 
@@ -234,24 +155,15 @@ class ProductRecommender(BaseAgent):
             }
 
 
->>>>>>> origin/main
         # 평균 유사도와 평점을 기준으로 제품들을 정렬
         relevant_products = sorted(
             analyzed_products.items(),
             key=lambda x: (
-<<<<<<< HEAD
-                x[1]['avg_similarity'] * 0.8 +  # 검색 관련성 80%
-                x[1]['avg_quality'] * 0.2       # 리뷰 품질 20%
-            ),
-            reverse=True
-        )
-=======
                 x[1]['avg_similarity'] * 0.5 +  # 검색 관련성 50%
                 x[1]['avg_quality'] * 0.5       # 리뷰 품질 50%
             ),
             reverse=True
             )[:5] 
->>>>>>> origin/main
 
         if not relevant_products:
             return {
@@ -268,11 +180,7 @@ class ProductRecommender(BaseAgent):
 
         # 리뷰 컨텍스트 생성 - 각 제품별로 여러 리뷰 종합
         review_contexts = []
-<<<<<<< HEAD
-        for product, data in relevant_products[:5]:  # 상위 5개 제품만 선택
-=======
         for product, data in relevant_products:
->>>>>>> origin/main
             product_context = f"""
             제품명: {product}
             전체 검토된 리뷰 수: {data['review_count']}
@@ -290,13 +198,8 @@ class ProductRecommender(BaseAgent):
                 - 감성 분석: {sentiment}
                 - 상세 내용: {review['text']}
                 """
-<<<<<<< HEAD
-            
-            review_contexts.append(product_context)
-=======
             review_contexts.append(product_context)
             
->>>>>>> origin/main
 
         # 사용자 요구사항 포맷팅
         scenario_text, concerns_text, worries_text = self._format_user_requirements(requirements)
@@ -321,19 +224,6 @@ class ProductRecommender(BaseAgent):
         [검색된 제품 리뷰들]
         {review_contexts}
 
-<<<<<<< HEAD
-        다음 규칙을 반드시 지켜주세요:
-        1. 반드시 제공된 리뷰에 언급된 제품만 추천해야 합니다
-        2. 실제 리뷰 내용만 인용해야 합니다
-        3. 리뷰에 없는 기능이나 특징을 임의로 추가하면 안됩니다
-        4. 사용자의 구체적인 요구사항과 제품의 특성을 매칭하여 추천 이유를 설명하세요
-        5. 각 추천 이유는 반드시 구체적인 리뷰 인용과 해당 리뷰의 출처 플랫폼을 포함해야 합니다
-        6. 제시된 형식을 정확히 따라주세요
-        7. 응답은 반드시 파싱 가능한 JSON 형식이어야 하며, JSON 외의 다른 텍스트를 포함하지 마세요"""
-
-        human_template = """다음 형식으로 정확히 추천해주세요:
-{"recommendations": [{"rank": 1,"product_name": "최우선 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources": ["플랫폼1","플랫폼2"]},{"rank": 2,"product_name": "차선책 추천 태블릿 이름","reasons": ["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability": ["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"differences": ["첫 번째 추천 제품과의 차이점 1","첫 번째 추천 제품과의 차이점 2"],"review_sources": ["플랫폼1","플랫폼2"]}]}"""
-=======
 다음 규칙을 반드시 지켜주세요:
         1. 반드시 제공된 리뷰에 언급된 제품만 추천해야 합니다
         2. 실제 리뷰 내용들만 인용해야 합니다
@@ -346,7 +236,6 @@ class ProductRecommender(BaseAgent):
 
         human_template = """다음 형식으로 정확히 추천해주세요:
 {{"recommendations":[{{"rank":1,"product_name":"최우선 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}},{{"rank":2,"product_name":"차선책 추천 태블릿 이름","reasons":["추천 이유 1 (실제 리뷰 인용 포함)","추천 이유 2 (실제 리뷰 인용 포함)"],"suitability":["사용자 요구사항과의 적합성 1","사용자 요구사항과의 적합성 2"],"review_sources":["플랫폼1","플랫폼2"]}}]}}"""
->>>>>>> origin/main
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_template),
@@ -362,17 +251,10 @@ class ProductRecommender(BaseAgent):
         }
 
         # 실제 프롬프트 내용 확인
-<<<<<<< HEAD
-        formatted_prompt = prompt.format_prompt(**prompt_data)
-        logger.debug("\n=== 실제 프롬프트 내용 ===")
-        logger.debug(formatted_prompt.to_string())  # 직접 포맷된 내용 출력
-        logger.debug("\n=== 프롬프트 끝 ===\n")
-=======
         #formatted_prompt = prompt.format_prompt(**prompt_data)
         #logger.debug("\n=== 실제 프롬프트 내용 ===")
         #logger.debug(formatted_prompt.to_string())  # 직접 포맷된 내용 출력
         #logger.debug("\n=== 프롬프트 끝 ===\n")
->>>>>>> origin/main
 
         # ChatGPT를 통한 추천 생성
         chain = prompt | ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=self.openai_api_key)
@@ -381,9 +263,6 @@ class ProductRecommender(BaseAgent):
         # JSON 파싱 시도
         try:
             # 앞뒤 공백 제거 및 불필요한 이스케이프 문자 제거
-<<<<<<< HEAD
-            cleaned_content = result.content.strip().replace('\n', '').replace('\\', '')
-=======
             #cleaned_content = result.content.strip().replace('\n', '').replace('\\', '')
             cleaned_content = (
                 result.content.strip()
@@ -392,7 +271,6 @@ class ProductRecommender(BaseAgent):
                 .replace('","{', '},{')  # JSON 형식 교정
                 .replace('"},"{"', '},{"')  # JSON 형식 추가 교정
             )
->>>>>>> origin/main
             recommendations_json = json.loads(cleaned_content)
             return recommendations_json
         except json.JSONDecodeError as e:
@@ -659,11 +537,7 @@ if __name__ == "__main__":
 
     import time
     st=time.time()
-<<<<<<< HEAD
-    recommender = ProductRecommender("tablet_reviews_db")
-=======
     recommender = ProductRecommender()
->>>>>>> origin/main
     
     # 사용자 요구사항 예시
     user_review_requirements = {
@@ -671,10 +545,6 @@ if __name__ == "__main__":
             "주요_활동": ["디지털 드로잉"],
             "사용_환경": ["카페", "이동 중", "실내"],
             "사용_시간": "하루 5시간 이상",
-<<<<<<< HEAD
-            "사용자_수준": "취미 작가"
-=======
->>>>>>> origin/main
         },
         "주요_관심사": {
             "브랜드_선호도": ["애플"],
@@ -690,22 +560,15 @@ if __name__ == "__main__":
             "AS 및 내구성",
         ]
     }
-<<<<<<< HEAD
-=======
 
     user_review_requirements = {'사용_시나리오': {'주요_활동': ['디지털 아트', '그림 그리기'], '사용_환경': ['실내'], '사용_시간': '장시간 사용', '사용자_수준': '전문가'}, '주요_관심사': {'브랜드_선호도': ['애플'], '불편사항': [], '만족도_중요항목': ['펜 지원', '디스플레이 품질']}, '감성적_요구사항': {'디자인_선호도': [], '가격대_심리': '프리미엄'}, '사용자_우려사항': []}
->>>>>>> origin/main
     
     # 추천 받기
     mt = time.time()
     print(mt-st)
     result = recommender.generate_recommendations(user_review_requirements)
     print("\n=== 제품 추천 결과 ===")
-<<<<<<< HEAD
-    print(result["recommendations"])
-=======
     print(result)
->>>>>>> origin/main
     print(time.time()-mt)
 
     

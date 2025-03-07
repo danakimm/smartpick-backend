@@ -39,20 +39,11 @@ feedback_agent = FeedbackAgent()
 async def parallel_analysis(state: AgentState) -> Dict:
     try:
         youtube_results, review_results, spec_results = await asyncio.gather(
-<<<<<<< HEAD
             youtube_agent.run(state["youtube_agent_state"]['youtube_analysis']), #asyncio.sleep(0)
-=======
-            asyncio.sleep(0),#youtube_agent.run(state["youtube_agent_state"]['youtube_analysis']),
->>>>>>> origin/main
             review_agent.run(state["review_agent_state"]['review_analysis']),
             spec_agent.run(state["spec_agent_state"]['spec_analysis']),
             return_exceptions=True
         )
-<<<<<<< HEAD
-        #youtube_results["youtube"]["raw_meta_data"]["자막"]="자막 생략"
-=======
-
->>>>>>> origin/main
         results = {
             **state,
             "youtube_results": {} if isinstance(youtube_results, Exception) else youtube_results,
@@ -80,18 +71,6 @@ async def middleware_processing(state: AgentState) -> Dict:
 
 async def report_generation(state: AgentState) -> Dict:
     logger.debug(f"Report input state: {state}")
-<<<<<<< HEAD
-   # try:
-    report_result = await report_agent.run(state['middleware_results'])
-    logger.debug(f"Final result: {report_result}")
-    return {
-        **state,  # 기존 state 유지
-        "report_results": report_result
-    }
-#except Exception as e:
-    #    logger.error(f"Error in report generation: {e}")
-    #    return {**state, "error": "리포트 생성 중 오류 발생"}
-=======
     try:
         report_result = await report_agent.run(state['middleware_results'])
         logger.debug(f"Final result: {report_result}")
@@ -102,7 +81,6 @@ async def report_generation(state: AgentState) -> Dict:
     except Exception as e:
         logger.error(f"Error in report generation: {e}")
         return {**state, "error": "리포트 생성 중 오류 발생"}
->>>>>>> origin/main
 
 async def handle_feedback(state: AgentState) -> Dict:
     logger.debug(f"Processing feedback: {state['feedback']}")
@@ -187,8 +165,3 @@ def define_feedback_workflow():
     workflow.add_edge("report_generation", END)
 
     return workflow
-<<<<<<< HEAD
-
-
-=======
->>>>>>> origin/main

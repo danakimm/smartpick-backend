@@ -64,11 +64,7 @@ class ReviewReporter(BaseReporter):
                     리뷰 집계 데이터:{data}
 
         """
-<<<<<<< HEAD
         cachepath="review_cache.h5"
-=======
-        cachepath=".review_cache.h5"
->>>>>>> origin/main
         find_dict={data["product_name"].replace(" ",""):[]}
         cache_key=data["product_name"].replace(" ","")
         require_key=required_keyt

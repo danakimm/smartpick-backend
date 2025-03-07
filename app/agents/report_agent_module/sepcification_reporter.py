@@ -143,11 +143,7 @@ class SpecificationReporter(BaseReporter):
                     다음은 테이블을 채우기 위해 제공되는 정보들입니다.
                     제품 스펙 및 전문가 소견 : {data}
         """
-<<<<<<< HEAD
         cachepath="Specification_cache.h5"
-=======
-        cachepath=".Specification_cache.h5"
->>>>>>> origin/main
         find_dict={data["제품명"].replace(" ",""):[]}
         cache_key=data["제품명"].replace(" ","")
         reject_key=None
