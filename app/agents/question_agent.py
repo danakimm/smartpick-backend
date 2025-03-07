@@ -475,4 +475,13 @@ class QuestionAgent(BaseAgent):
             "status": "confirming_requirements"
         }
         
-
+    async def close(self):
+        """리소스 정리를 위한 메소드"""
+        try:
+            # LLM 인스턴스 정리
+            if hasattr(self, 'llm'):
+                await self.llm.aclose()
+            logger.debug("QuestionAgent closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing QuestionAgent: {e}")
+        
