@@ -25,17 +25,17 @@ class ReportAgent(BaseAgent):
         self.last_report=None
         
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"input key name check!!!!:{state[0].keys()}")
-        data=state["middleware"][0]
-        youtube_input=data["youtube"]
-        query=youtube_input["youtube"]["query"]
-        review_input=data["review"]
-        specification_input=data["specification"]
+        logger.debug(f"input key name check!!!!:{state.keys()}")
+        data=state["middleware"]
+        youtube_input=data["youtube"][0]
+        query=data["query"]
+        review_input=data["review"][0]
+        specification_input=data["specification"][0]
         
         # 동기 래퍼 함수들
         def youtube_wrapper():
             # 새 이벤트 루프를 생성하여 비동기 함수 실행
-            return asyncio.run(youtube_main(youtube_input))
+            return asyncio.run(youtube_main(youtube_input,query))
             
         def review_wrapper():
             return asyncio.run(review_main(review_input, query))
