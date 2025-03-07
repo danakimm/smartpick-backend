@@ -25,7 +25,6 @@ class ReportAgent(BaseAgent):
         self.last_report=None
         
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"input key name check!!!!:{state.keys()}")
         data=state["middleware"]
         youtube_input=data["youtube"][0]
         query=data["query"]
