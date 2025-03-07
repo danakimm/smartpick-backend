@@ -96,7 +96,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 "review_results": {},
                                 "spec_results": {},
                                 "middleware_results": {},
-                                "final_report": "",
+                                "report_results": "",
                                 "feedback": "",
                                 "feedback_type": "",
                                 "refined_requirements": {},
@@ -149,7 +149,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "review_results": initial_response.get("review_results", {}),
                         "spec_results": initial_response.get("spec_results", {}),
                         "middleware_results": initial_response.get("middleware_results", {}),
-                        "final_report": initial_response.get("final_report", ""),
+                        "report_results": initial_response.get("report_results", ""),
                         "feedback": feedback_content,
                         "feedback_type": "",
                         "refined_requirements": {},
@@ -166,10 +166,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         await websocket.send_json({
                             "type": "feedback_response",
                             "client_id": client_id,
-                            "data": {
-                                "response": final_state.get("final_report", ""),
-                                "analysis": final_state.get("middleware_results", {}).get("analysis", {})
-                            }
+                            "data": final_state
                         })
                     else:  # 단순 질문
                         await websocket.send_json({
