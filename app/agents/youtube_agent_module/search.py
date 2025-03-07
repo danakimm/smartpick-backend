@@ -637,7 +637,7 @@ class RAGOUT():
             self.output['llm_process_data']['seconds']=self.video_extraction['seconds']
             self.output['llm_process_data']['descriptions']=self.video_extraction['descriptions']
             self.output['llm_process_data']['codes']=self.video_extraction['codes']
-            self.output['llm_process_data']['clip']=self.video_extraction['clip'].replace("watch?","embed/")
+            self.output['llm_process_data']['clip']=self.video_extraction['clip'].replace("watch?v=","embed/").replace("&t=","?time=")#https://www.youtube.com/embed/lCo2_4Qwjdo?time=900  http://youtube.com/watch?v=lCo2_4Qwjdo&t=900
         except:
             self.output['llm_process_data']['timestamps']="적합한 데이터 추론 실패"
             self.output['llm_process_data']['timestampsdiscriptions']="적합한 데이터 추론 실패"
