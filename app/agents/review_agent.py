@@ -51,38 +51,46 @@ class ProductRecommender(BaseAgent):
         search_queries = []
         
         # 주요 활동 관련 리뷰
-        search_queries.extend([f"{activity} 사용 경험" for activity in requirements['사용_시나리오']['주요_활동']])
+        if requirements['사용_시나리오']['주요_활동']:
+            search_queries.extend([f"{activity}" for activity in requirements['사용_시나리오']['주요_활동']])
         
         # 사용 환경 관련 리뷰
-        search_queries.extend([f"{env}에서 사용" for env in requirements['사용_시나리오']['사용_환경']])
+        if requirements['사용_시나리오']['사용_환경']:
+            search_queries.extend([f"{env}" for env in requirements['사용_시나리오']['사용_환경']])
         
         # 사용 시간 관련 리뷰
-        search_queries.append(f"사용 시간 {requirements['사용_시나리오']['사용_시간']}")
+        if requirements['사용_시나리오']['사용_시간']:
+            search_queries.append(f"{requirements['사용_시나리오']['사용_시간']}")
 
         # 브랜드 선호도 관련 리뷰
-        search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
+        if requirements['주요_관심사']['브랜드_선호도']:
+            search_queries.extend(requirements['주요_관심사']['브랜드_선호도'])
         
         # 불편사항 관련 리뷰
-        search_queries.extend([f"{issue} 문제" for issue in requirements['주요_관심사']['불편사항']])
+        if requirements['주요_관심사']['불편사항']:
+            search_queries.extend([f"{issue} 문제" for issue in requirements['주요_관심사']['불편사항']])
         
         # 만족도 중요항목 관련 리뷰
-        search_queries.extend([f"{item} 만족" for item in requirements['주요_관심사']['만족도_중요항목']])
+        if requirements['주요_관심사']['만족도_중요항목']:
+            search_queries.extend([f"{item} 만족" for item in requirements['주요_관심사']['만족도_중요항목']])
         
         # 디자인 선호도 관련 리뷰
-        search_queries.extend([f"디자인 {pref}" for pref in requirements['감성적_요구사항']['디자인_선호도']])
+        if requirements['감성적_요구사항']['디자인_선호도']:
+            search_queries.extend([f"디자인 {pref}" for pref in requirements['감성적_요구사항']['디자인_선호도']])
         
         # 가격대 관련 리뷰 - '상관없음'이 아닐 때만 포함
         price_sentiment = requirements['감성적_요구사항']['가격대_심리']
-        if price_sentiment != "상관없음":
-            if "저렴" in price_sentiment:
+        if price_sentiment and price_sentiment != "상관없음":
+            if "가성비" in price_sentiment:
                 search_queries.extend(["가격 저렴", "가성비", "합리적인 가격"])
-            elif "비싸" in price_sentiment:
+            elif "프리미엄" in price_sentiment:
                 search_queries.extend(["가격이 비싸", "고가", "프리미엄"])
             else:
                 search_queries.append(f"가격 {price_sentiment}")
         
         # 우려사항 관련 리뷰
-        search_queries.extend([f"{worry} 경험" for worry in requirements['사용자_우려사항']])
+        if requirements['사용자_우려사항']:
+            search_queries.extend([f"{worry}" for worry in requirements['사용자_우려사항']])
         
         # 빈 문자열이나 None 값 제거 및 중복 제거
         search_queries = list(set([
@@ -112,7 +120,7 @@ class ProductRecommender(BaseAgent):
         seen_reviews = set()
         for review in all_reviews:
             review_text = review['text']
-            if review_text not in seen_reviews and len(review_text) > 20:  # 최소 길이 필터
+            if review_text not in seen_reviews and len(review_text) > 15:  # 최소 길이 필터
                 filtered_reviews.append(review)
                 seen_reviews.add(review_text)
 
@@ -151,8 +159,8 @@ class ProductRecommender(BaseAgent):
         relevant_products = sorted(
             analyzed_products.items(),
             key=lambda x: (
-                x[1]['avg_similarity'] * 0.8 +  # 검색 관련성 80%
-                x[1]['avg_quality'] * 0.2       # 리뷰 품질 20%
+                x[1]['avg_similarity'] * 0.5 +  # 검색 관련성 50%
+                x[1]['avg_quality'] * 0.5       # 리뷰 품질 50%
             ),
             reverse=True
             )[:5] 
@@ -190,6 +198,7 @@ class ProductRecommender(BaseAgent):
                 - 감성 분석: {sentiment}
                 - 상세 내용: {review['text']}
                 """
+            review_contexts.append(product_context)
             
 
         # 사용자 요구사항 포맷팅
@@ -254,7 +263,14 @@ class ProductRecommender(BaseAgent):
         # JSON 파싱 시도
         try:
             # 앞뒤 공백 제거 및 불필요한 이스케이프 문자 제거
-            cleaned_content = result.content.strip().replace('\n', '').replace('\\', '')
+            #cleaned_content = result.content.strip().replace('\n', '').replace('\\', '')
+            cleaned_content = (
+                result.content.strip()
+                .replace('\n', '')
+                .replace('\\', '')  # 모든 백슬래시 제거
+                .replace('","{', '},{')  # JSON 형식 교정
+                .replace('"},"{"', '},{"')  # JSON 형식 추가 교정
+            )
             recommendations_json = json.loads(cleaned_content)
             return recommendations_json
         except json.JSONDecodeError as e:
