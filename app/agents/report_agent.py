@@ -28,6 +28,7 @@ class ReportAgent(BaseAgent):
         data=state["middleware"]
         youtube_input=data["youtube"][0]
         query=data["query"]
+        logger.debug(query)
         review_input=data["review"][0]
         specification_input=data["specification"][0]
         

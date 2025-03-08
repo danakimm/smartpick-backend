@@ -7,6 +7,11 @@ from app.utils.logger import logger
 
 router = APIRouter()
 active_connections: Dict[str, WebSocket] = {}  # client_id로 연결 관리
+def safe_none(value):
+    if not value:
+        return {"None": ""}
+    else:
+        return value
 
 
 @router.websocket("/ws/{client_id}")
@@ -29,8 +34,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             "type": "message",
             "client_id": client_id,
             "data": {
-                "response": initial_response.get("response", ""),
-                "status": initial_response.get("status", "")
+                "response": safe_none(initial_response).get("response", ""),
+                "status": safe_none(initial_response).get("status", "")
             }
         })
 
@@ -60,13 +65,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 # QuestionAgent 상태 업데이트
                 state = {
                     "user_input": content,
-                    "conversation_history": initial_response.get('conversation_history', []),
-                    "requirements": initial_response.get('requirements', ""),
-                    "collected_info": initial_response.get('collected_info', {}),
-                    "missing_info": initial_response.get('missing_info', []),
-                    "current_question": initial_response.get('current_question', ""),
-                    "status": initial_response.get('status', ""),
-                    "additional_requirements": initial_response.get('additional_requirements', "")
+                    "conversation_history": safe_none(initial_response).get('conversation_history', []),
+                    "requirements": safe_none(initial_response).get('requirements', ""),
+                    "collected_info": safe_none(initial_response).get('collected_info', {}),
+                    "missing_info": safe_none(initial_response).get('missing_info', []),
+                    "current_question": safe_none(initial_response).get('current_question', ""),
+                    "status": safe_none(initial_response).get('status', ""),
+                    "additional_requirements": safe_none(initial_response).get('additional_requirements', "")
                 }
 
                 try:
@@ -77,26 +82,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "type": "message",
                         "client_id": client_id,
                         "data": {
-                            "response": response.get("response", ""),
-                            "status": response.get("status", "")
+                            "response": safe_none(response).get("response", ""),
+                            "status": safe_none(response).get("status", "")
                         }
                     })
 
                     # requirements_collected 상태인 경우 초기 워크플로우 실행
-                    if response.get('status') == "requirements_collected":
+                    if safe_none(response).get('status') == "requirements_collected":
                         try:
-                            agent_states = await question_agent._prepare_agent_states(response.get('requirements', ""))
+                            agent_states = await question_agent._prepare_agent_states(safe_none(response).get('requirements', ""))
 
                             initial_state = {
-                                "question": response.get("requirements", ""),
-                                "youtube_agent_state": agent_states.get("youtube_agent_state", {}),
-                                "review_agent_state": agent_states.get("review_agent_state", {}),
-                                "spec_agent_state": agent_states.get("spec_agent_state", {}),
+                                "question": safe_none(response).get("requirements", ""),
+                                "youtube_agent_state": safe_none(agent_states).get("youtube_agent_state", {}),
+                                "review_agent_state": safe_none(agent_states).get("review_agent_state", {}),
+                                "spec_agent_state": safe_none(agent_states).get("spec_agent_state", {}),
                                 "youtube_results": {},
                                 "review_results": {},
                                 "spec_results": {},
                                 "middleware_results": {},
-                                "report_results": "",
+                                "report_results": {},
                                 "feedback": "",
                                 "feedback_type": "",
                                 "refined_requirements": {},
@@ -137,19 +142,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 # 피드백 처리
                 try:
                     feedback_content = message.get("content", "")
-                    requirements = initial_response.get("requirements", "")
+                    requirements = safe_none(initial_response).get("requirements", "")
 
                     # 피드백 워크플로우용 상태 준비
                     feedback_state = {
                         "question": requirements,
-                        "youtube_agent_state": initial_response.get("youtube_agent_state", {}),
-                        "review_agent_state": initial_response.get("review_agent_state", {}),
-                        "spec_agent_state": initial_response.get("spec_agent_state", {}),
-                        "youtube_results": initial_response.get("youtube_results", {}),
-                        "review_results": initial_response.get("review_results", {}),
-                        "spec_results": initial_response.get("spec_results", {}),
-                        "middleware_results": initial_response.get("middleware_results", {}),
-                        "report_results": initial_response.get("report_results", ""),
+                        "youtube_agent_state": safe_none(initial_response).get("youtube_agent_state", {}),
+                        "review_agent_state": safe_none(initial_response).get("review_agent_state", {}),
+                        "spec_agent_state": safe_none(initial_response).get("spec_agent_state", {}),
+                        "youtube_results": safe_none(initial_response).get("youtube_results", {}),
+                        "review_results": safe_none(initial_response).get("review_results", {}),
+                        "spec_results": safe_none(initial_response).get("spec_results", {}),
+                        "middleware_results": safe_none(initial_response).get("middleware_results", {}),
+                        "report_results": safe_none(initial_response).get("report_results", {}),
                         "feedback": feedback_content,
                         "feedback_type": "",
                         "refined_requirements": {},

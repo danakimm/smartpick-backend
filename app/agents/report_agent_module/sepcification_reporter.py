@@ -3,6 +3,7 @@ import re
 from .dummy import get_test_dummy
 from .template_generator import ResultTemplate, Product, Reviews, Purchase_Info_Stores
 from .bsae_reporter import BaseReporter
+from app.utils.logger import logger
 test_set = {'제품명':'APPLE 2024 iPad mini A17 Pro 7세대', 
     '가격': 749000, 
         '추천 이유': {'pros': ['장점 1', '장점 2', '장점 3'], 'cons': ['단점 1', '단점 2', '단점 3']}, 
@@ -48,6 +49,7 @@ flat_dict = {
 }
 class SpecificationReporter(BaseReporter):
     def __init__(self,input,query):
+        self.backup_name=None
         script=[]
         script.append('현재 첫번째 시도입니다.')
         script.append('두번째 시도입니다. 다음 질문과 함꼐 다시 생각해 보세요,')
@@ -111,6 +113,7 @@ class SpecificationReporter(BaseReporter):
                     0. 테이블에 입력할 정보를 A로 칭하고 이를 위해 제공한 정보를 B로 칭합니다. 
                     1. 첫번째 단계 유저 요청을 확인하고 A를 어떻게 구성할지 파악합니다. 또한 같이 들어온 질문이 있다면 이를 확인하고 문제해결에 도움이 될만한 답변을 찾습니다. 해당 답변은 [[answer::답변내용]]으로 반환합니다.
                     2. 두번째 단계 B를 분석하고 파악합니다. 어떤 정보를 활용가능한지 어떤정보는 불필요한지 정제하고 수집합니다.
+                    2-1 단 수집에 있어 유의해야 할 점은 기술사양에 유저는 현재 정보를 명확하게 인식하지 못하기에 과거의 정보일 수 있다는 점입니다. 따라서 가지고있는 최신 자료에 기반하여 최십 칩셋으로 변경하여 추천을 해줘야만 합니다. 이점 유의하세요
                     3. 세번째 단계 2번의 결과를 이용하여 최대한 정밀하게 A를 구성합니다.
                     4. 3번의 결과에서 유저의 요청과 일치하지않는 부분을 확인합니다. 이에 대헤 스스로 의문점이 있는지 확인압니다.
                     4-1 정보가 부족하다고 판단되면 반드시 3회까지 스스로에게 질문을 던져서 정말로 그런지 단 한칸도 채울수 없는지 확인해서 최대한 정확한 정보를 제공합니다.질문은 다음양식으로 반환해야합니다. [[selfquestion::질문내용]]
@@ -144,13 +147,15 @@ class SpecificationReporter(BaseReporter):
                     제품 스펙 및 전문가 소견 : {data}
         """
         cachepath="Specification_cache.h5"
+        
         try:
             find_dict={data["제품명"].replace(" ",""):[]}
             cache_key=data["제품명"].replace(" ","")
-
+            self.backup_name=data["제품명"]
         except:
             find_dict=None
             cache_key=None
+            self.backup_name
         reject_key=None
         #####################################################################
         super().__init__(
@@ -223,6 +228,9 @@ async def sepcification_main(input,query):
         print(e)
         print(f"오류가 발생했습니다.반환값:{result[0]}")
     output={}
+    if reporter.backup_name:
+        item_product["name"]=reporter.backup_name
+        
     output['Purchase']=Purchase_Info
     output['Product']=item_product
     return output, reporter

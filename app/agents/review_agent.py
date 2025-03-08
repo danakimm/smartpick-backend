@@ -78,6 +78,8 @@ class ProductRecommender(BaseAgent):
         if requirements['감성적_요구사항']['디자인_선호도']:
             search_queries.extend([f"디자인 {pref}" for pref in requirements['감성적_요구사항']['디자인_선호도']])
         
+        
+        
         # 가격대 관련 리뷰 - '상관없음'이 아닐 때만 포함
         price_sentiment = requirements['감성적_요구사항']['가격대_심리']
         if price_sentiment and price_sentiment != "상관없음":
@@ -163,7 +165,7 @@ class ProductRecommender(BaseAgent):
                 x[1]['avg_quality'] * 0.5       # 리뷰 품질 50%
             ),
             reverse=True
-            )[:5] 
+            )[:3] 
 
         if not relevant_products:
             return {
