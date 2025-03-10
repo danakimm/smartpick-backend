@@ -108,11 +108,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 "feedback_response": "",
                             }
 
-                            logger.debug(f"Starting initial workflow with state: {initial_state}")
 
                             final_state = await initial_app.ainvoke(initial_state)
                             initial_response.update(final_state)  # 상태 저장
-                            
+                            logger.debug(f"test{final_state}")
+                            logger.debug(f'moniter bad_person: {final_state["report_results"]["report"]["product"]["recommendation"]["bad_person"]}')
+                            logger.debug(f'moniter pros: {final_state["report_results"]["report"]["reviews"]["youtuber"]["pros"]}')
+                            logger.debug(f'moniter negative_reviews: {final_state["report_results"]["report"]["reviews"]["general_users"]["negative_reviews"]}')
                             await websocket.send_json({
                                 "type": "complete",
                                 "client_id": client_id,
@@ -168,6 +170,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
                     # 응답 전송 (피드백 타입에 따라 다른 응답)
                     if final_state.get("feedback_type") == "refinement":
+                        
                         await websocket.send_json({
                             "type": "feedback_response",
                             "client_id": client_id,

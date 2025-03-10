@@ -5,6 +5,7 @@ import os
 import h5py
 import hashlib
 import json
+from app.utils.logger import logger
 class CacheManager:
     """
     HDF5 파일을 사용하여 해시화된 키-값 쌍을 저장하고 검색하는 클래스
@@ -183,6 +184,17 @@ class BaseReporter:
         self.cache_key=cache_key
         self.require_key=require_key
         self.reject_key=reject_key
+    @staticmethod
+    def clean_list(data):
+        if isinstance(data,str):
+            try:
+                buff=data.replace("[","").replace("]","").replace("(","").replace(")","").replace("{","").replace("}","").replace("n\\" , "" ).replace("\\","")
+                clean_data = [item.strip() for item in buff.split(",") if item.strip()]
+                return  clean_data
+            except:
+                return  []
+        return data if data is not None else []
+    
     def get_response(self):
         if self.cache.get_value(self.find_dict):
             return list(self.cache.get_dict.values())[0],["cached output"]
@@ -222,12 +234,34 @@ class BaseReporter:
         # [[키::값]] 또는 [[키:값]] 형태의 항목을 찾는 정규표현식
         pattern = r"\[\[([^:\]]+)(?:::|:)(.*?)\]\]"
         matches = re.findall(pattern, text, re.DOTALL)
-        
+        print (f"매치 디버그 : {matches}")
         result = {}
+        
+    
         for key, value in matches:
             key = key.strip()
             value = value.strip()
+            #key_l=key.split(".")
+            #if isinstance(key_l,list):
+            #    key_f=key_l-1    
+            #else:
+            #    key_f=key_l    
+            #list_key=["negative_reviews", "user_comments", "positive_reviews", "pros", "cons", "negative_reviews", "good_person", "bad_person"]
+            #
+            #
+            #
+            ##if key.startswith("negative_reviews") or key.startswith("user_comments") or key.startswith("positive_reviews") or key.startswith("pros") or key.startswith("cons") or key.startswith("negative_reviews") or key.startswith("good_person") or key.startswith("bad_person"):
+            #    logger.debug(f"debug value:{value}")
             # 동일한 키가 이미 존재하면 리스트에 추가
+            #if key_f in list_key:
+            #    if isinstance(result[key], list):
+            #        result[key].append(self.clean_list(value))
+            #        logger.debug(result[key])
+            #    else:
+            #        result[key] = [result[key], self.clean_list(value)]
+            #        logger.debug(result[key])
+            
+            
             if key in result:
                 if isinstance(result[key], list):
                     result[key].append(value)

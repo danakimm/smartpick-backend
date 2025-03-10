@@ -72,6 +72,8 @@ class ReportAgent(BaseAgent):
         self.review_report.set_value(self.result_dict)
         self.specification_report.set_value(self.result_dict)
         self.purchase_report.set_value(self.result_dict)
+        #self.result_dict=self.generator.clean_all(self.result_dict)
         self.last_report=self.result_dict
+        
         return self.result_dict
     

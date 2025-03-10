@@ -205,9 +205,9 @@ class ProductRecommender(BaseAgent):
 
         # 사용자 요구사항 포맷팅
         scenario_text, concerns_text, worries_text = self._format_user_requirements(requirements)
-        logger.debug(scenario_text)
-        logger.debug(concerns_text)
-        logger.debug(worries_text)
+        #logger.debug(scenario_text)
+        #logger.debug(concerns_text)
+        #logger.debug(worries_text)
 
 
         # 추천 생성을 위한 프롬프트 개선
@@ -563,15 +563,16 @@ if __name__ == "__main__":
         ]
     }
 
-    user_review_requirements = {'사용_시나리오': {'주요_활동': ['디지털 아트', '그림 그리기'], '사용_환경': ['실내'], '사용_시간': '장시간 사용', '사용자_수준': '전문가'}, '주요_관심사': {'브랜드_선호도': ['애플'], '불편사항': [], '만족도_중요항목': ['펜 지원', '디스플레이 품질']}, '감성적_요구사항': {'디자인_선호도': [], '가격대_심리': '프리미엄'}, '사용자_우려사항': []}
+    #user_review_requirements = {'사용_시나리오': {'주요_활동': ['디지털 아트', '그림 그리기'], '사용_환경': ['실내'], '사용_시간': '장시간 사용', '사용자_수준': '전문가'}, '주요_관심사': {'브랜드_선호도': ['애플'], '불편사항': [], '만족도_중요항목': ['펜 지원', '디스플레이 품질']}, '감성적_요구사항': {'디자인_선호도': [], '가격대_심리': '프리미엄'}, '사용자_우려사항': []}
     
     # 추천 받기
     mt = time.time()
-    print(mt-st)
+    #print(mt-st)
+    print(user_review_requirements)
     result = recommender.generate_recommendations(user_review_requirements)
     print("\n=== 제품 추천 결과 ===")
     print(result)
-    print(time.time()-mt)
+    #print(time.time()-mt)
 
     
     # from app.agents.tablet_reviews_db.review_db_manager import ReviewDBManager

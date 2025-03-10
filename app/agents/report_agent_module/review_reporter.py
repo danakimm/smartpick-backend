@@ -11,7 +11,7 @@ class ReviewReporter(BaseReporter):
         script.append('현재 첫번째 시도입니다.')
         script.append('두번째 시도입니다. 다음 질문과 함꼐 다시 생각해 보세요,')
         script.append('세번째 시도입니다. 이전의 질의 응답과 함꼐 다시 생각해 보세요,')
-        script.append('이번이 마지막 시도입니다. 이전의 질의 응답과 함꼐 다시 생각해 보세요, 이번엔 질문을 반환하지 않고 나머지 값을 최대한 채워서 반환합니다. 마지막 반환 시에는 반드시 데이터를 확인하고 채울 수 있는데 채우지 않은 항목이 있는지 꼼꼼히 확인합니다.')
+        script.append('이번이 마지막 시도입니다. 이전의 질의 응답과 함꼐 다시 생각해 보세요, 이번엔 질문을 반환하지 않고 나머지 값을 최대한 채워서 반환합니다. 마지막 반환 시에는 반드시 데이터를 확인하고 채울 수 있는데 채우지 않은 항목이 있는지 꼼꼼히 확인합니다. 도저히 채울 수 없는 부분은 "관련 자료 없음" 으로 입력하여 반환합니다')
         required_keyt=["general_users.total_reviews","general_users.positive_percentage","general_users.negative_percentage","general_users.positive_reviews","general_users.negative_reviews","general_users.negative_reviews","general_users.user_comments"]
         table_content="""
                             ### 🔹 일반 사용자 리뷰 (`general_users`)
@@ -47,8 +47,9 @@ class ReviewReporter(BaseReporter):
                             [[general_users.negative_percentage::부정 리뷰 비율]], [[general_users.positive_reviews::긍정적인 리뷰 예시]], 
                             [[general_users.negative_reviews::부정적인 리뷰 예시]], [[general_users.user_comments::실제 사용자 댓글]]
                             최종적으로 비어있는 내용이있는지 확인합니다 만약 비어있는 내용이 있다면 스스로에게 질문을 던지고 질문은 다음양식으로 반환해야합니다. [[selfquestion::질문내용]] 내용이 완전하다면 질문은 반환하지 않습니다.질문은 매번 새로운 질문으로 변화를 줍니다.
-                            최종 시도에서는 비어있는 내용이 있다 하더라도 질문은 반환하지 않고, 나머지 값은 그대로 출력합니다. 마지막 반환 시에는 반드시 데이터를 확인하고 채울 수 있는데 채우지 않은 항목이 있는지 꼼꼼히 확인합니다.
+                            최종 시도에서는 비어있는 내용이 있다 하더라도 질문은 반환하지 않고, 나머지 값은 그대로 출력합니다. 마지막 반환 시에는 반드시 데이터를 확인하고 채울 수 있는데 채우지 않은 항목이 있는지 꼼꼼히 확인합니다. 도저히 채울 수 없는 부분은 "관련 자료 없음" 으로 입력하여 반환합니다
                             다시한번 해당항목들{required_keyt}이 모두 채워졌는지 확인하고 반환은 추가 문구 없이 결과한 반환합니다. 또한 위의 양식을 준수합니다.
+                            해당 양식이 완전하지 않거나 길다고 생략하면 뒤의 파싱 로직이 완전히 망가지기때문에 "절대적으로" 준수해야함
                             """
         ##############################################
         data=input

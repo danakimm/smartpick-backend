@@ -7,7 +7,59 @@ class ResultTemplate:
         self.generator = self.TemplateGenerator(self.template)
         self.dict_NONE = self.generator.dict()
         self.dict = self.generator.dict()
+    @staticmethod
+    def clean_list(data):
+        if isinstance(data,str):
+            try:
+                buff=data.replace("[","").replace("]","").replace("(","").replace(")","").replace("{","").replace("}","")
+                clean_data = [item.strip() for item in buff.split(",") if item.strip()]
+                return  clean_data
+            except:
+                return  []
+        return data if data is not None else []
+    #def clean_list(data):
+    #if isinstance(data,str) and len(data)>3 and data[0]=="[":
+    #    if data[-1]==",":
+    #        data = data[:-1]
+    #    if not data.endswith("]"):
+    #        data += "]"
+    #return data  
+    
+     
+    @classmethod
+    def clean_all(cls, data):
+        """
+        입력 data가 dict, list, str 인 경우 재귀적으로 순회하며
+        문자열인 경우 clean_list 함수를 적용합니다.
+        타임스탬프 키인 경우 특별히 처리합니다.
+        """
+        if isinstance(data, str):
+            return cls.clean_list(data)
+        elif isinstance(data, list):
+            return [cls.clean_all(item) for item in data]
+        elif isinstance(data, dict):
+            result = {}
+            for key, val in data.items():
+                # 타임스탬프 키 특별 처리
+                
+                    
+                if key.startswith("timestamp") and isinstance(val, (str, list)):
+                    # 문자열로 변환 (배열이면 첫 번째 항목 사용)
+                    if isinstance(val, list) and len(val) > 0:
+                        result[key] = str(val[0])
+                    else:
+                        result[key] = str(val) if val else ""
+
+                elif (key.startswith("negative_reviews") or key.startswith("user_comments") or key.startswith("positive_reviews") or key.startswith("pros") or key.startswith("cons") or key.startswith("negative_reviews") or key.startswith("good_person") or key.startswith("bad_person"))and isinstance(val, (str, list)):
+                    result[key] = cls.clean_all(val)
+                else:    
+                    result[key]=val
+            return result
+        else:
+            return data
         
+    
+  
         
     @staticmethod
     def default_template():
@@ -130,6 +182,10 @@ class ResultTemplate:
             self._path = path  # 참고용으로 남겨두지만, 더 이상 접두사로 사용하지 않음
             self._data = {}
             self._build()
+
+            
+            
+            
 
         def _build(self):
             for key, value in self._template.items():
